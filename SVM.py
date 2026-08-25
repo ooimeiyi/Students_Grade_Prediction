@@ -22,7 +22,6 @@ from sklearn.preprocessing import (
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
-
 from sklearn.svm import SVC
 
 from sklearn.metrics import (
@@ -34,7 +33,6 @@ from sklearn.metrics import (
 
 warnings.filterwarnings("ignore")
 
-
 # ============================================================
 # SETTINGS
 # ============================================================
@@ -43,15 +41,16 @@ FILE_NAME = "Students_Performance_Dataset_Clean.csv"
 ARTIFACTS_DIR = "artifacts"
 TARGET = "Grade"
 
-os.makedirs(ARTIFACTS_DIR, exist_ok=True)
-
+os.makedirs(
+    ARTIFACTS_DIR,
+    exist_ok=True
+)
 
 # ============================================================
 # 1. LOAD DATASET
 # ============================================================
 
 df = pd.read_csv(FILE_NAME)
-
 
 # ============================================================
 # 2. REMOVE UNNECESSARY COLUMNS
@@ -72,16 +71,19 @@ remove_columns = [
     if col in df.columns
 ]
 
-df = df.drop(columns=remove_columns)
-
+df = df.drop(
+    columns=remove_columns
+)
 
 # ============================================================
 # 3. SEPARATE FEATURES AND TARGET
 # ============================================================
 
-X = df.drop(columns=[TARGET])
-y = df[TARGET]
+X = df.drop(
+    columns=[TARGET]
+)
 
+y = df[TARGET]
 
 # ============================================================
 # 4. ENCODE TARGET
@@ -90,7 +92,6 @@ y = df[TARGET]
 label_encoder = LabelEncoder()
 
 y = label_encoder.fit_transform(y)
-
 
 # ============================================================
 # OUTPUT
@@ -103,7 +104,6 @@ print("============================================")
 print("\nGrade classes:")
 print(label_encoder.classes_)
 
-
 # ============================================================
 # 5. FEATURE TYPES
 # ============================================================
@@ -113,9 +113,13 @@ numeric_features = X.select_dtypes(
 ).columns.tolist()
 
 categorical_features = X.select_dtypes(
-    include=["object", "category", "bool", "string"]
+    include=[
+        "object",
+        "category",
+        "bool",
+        "string"
+    ]
 ).columns.tolist()
-
 
 # ============================================================
 # 6. PREPROCESSING
@@ -125,7 +129,9 @@ numeric_transformer = Pipeline(
     steps=[
         (
             "imputer",
-            SimpleImputer(strategy="median")
+            SimpleImputer(
+                strategy="median"
+            )
         ),
         (
             "scaler",
@@ -138,7 +144,9 @@ categorical_transformer = Pipeline(
     steps=[
         (
             "imputer",
-            SimpleImputer(strategy="most_frequent")
+            SimpleImputer(
+                strategy="most_frequent"
+            )
         ),
         (
             "onehot",
@@ -165,7 +173,6 @@ preprocessor = ColumnTransformer(
     ]
 )
 
-
 # ============================================================
 # 7. TRAIN / TEST SPLIT
 # ============================================================
@@ -178,18 +185,27 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
+print(
+    "\nTraining samples:",
+    len(X_train)
+)
 
-print("\nTraining samples:", len(X_train))
-print("Testing samples :", len(X_test))
-
+print(
+    "Testing samples :",
+    len(X_test)
+)
 
 # ============================================================
 # 8. PREPROCESS
 # ============================================================
 
-X_train_processed = preprocessor.fit_transform(X_train)
-X_test_processed = preprocessor.transform(X_test)
+X_train_processed = preprocessor.fit_transform(
+    X_train
+)
 
+X_test_processed = preprocessor.transform(
+    X_test
+)
 
 # ============================================================
 # 9. EVALUATION FUNCTION
@@ -225,7 +241,6 @@ def evaluate_model(y_true, y_pred):
         )
     }
 
-
 # ============================================================
 # 10. BEFORE FINE-TUNING
 # ============================================================
@@ -236,23 +251,19 @@ baseline_model = SVC(
     gamma="scale"
 )
 
-
 baseline_model.fit(
     X_train_processed,
     y_train
 )
 
-
 baseline_pred = baseline_model.predict(
     X_test_processed
 )
-
 
 before_results = evaluate_model(
     y_test,
     baseline_pred
 )
-
 
 print("\n============================================")
 print("BEFORE FINE-TUNING")
@@ -271,9 +282,8 @@ print(
 )
 
 print(
-    f"Recall   : {before_results['Recall']:.4f}"
+    f"Recall : {before_results['Recall']:.4f}"
 )
-
 
 # ============================================================
 # 11. FINE-TUNING
@@ -283,9 +293,7 @@ print("\n============================================")
 print("FINE-TUNING SVM")
 print("============================================")
 
-
 param_grid = {
-
     "C": [
         0.1,
         0.5,
@@ -324,16 +332,13 @@ param_grid = {
     ]
 }
 
-
 tuning_model = SVC()
-
 
 cv = StratifiedKFold(
     n_splits=3,
     shuffle=True,
     random_state=42
 )
-
 
 random_search = RandomizedSearchCV(
     estimator=tuning_model,
@@ -346,12 +351,10 @@ random_search = RandomizedSearchCV(
     n_jobs=-1
 )
 
-
 random_search.fit(
     X_train_processed,
     y_train
 )
-
 
 # ============================================================
 # 12. BEST MODEL
@@ -364,7 +367,6 @@ print(
     f"\nBest CV F1 Score: "
     f"{random_search.best_score_:.4f}"
 )
-
 
 # ============================================================
 # 13. AFTER FINE-TUNING
@@ -380,7 +382,6 @@ after_results = evaluate_model(
     y_test,
     tuned_pred
 )
-
 
 print("\n============================================")
 print("AFTER FINE-TUNING")
@@ -399,9 +400,8 @@ print(
 )
 
 print(
-    f"Recall   : {after_results['Recall']:.4f}"
+    f"Recall : {after_results['Recall']:.4f}"
 )
-
 
 # ============================================================
 # 14. BEFORE VS AFTER
@@ -420,7 +420,6 @@ print(
 
 print("-" * 54)
 
-
 for metric in [
     "Accuracy",
     "F1",
@@ -430,6 +429,7 @@ for metric in [
 
     before = before_results[metric]
     after = after_results[metric]
+
     improvement = after - before
 
     print(
@@ -438,7 +438,6 @@ for metric in [
         f"{after:>12.4f}"
         f"{improvement:>15.4f}"
     )
-
 
 # ============================================================
 # 15. SAVE ARTIFACTS
@@ -468,11 +467,18 @@ joblib.dump(
     )
 )
 
-
 print("\n============================================")
 print("SVM ARTIFACTS SAVED")
 print("============================================")
 
-print("artifacts/svm_grade_model.pkl")
-print("artifacts/svm_preprocessor.pkl")
-print("artifacts/svm_label_encoder.pkl")
+print(
+    "artifacts/svm_grade_model.pkl"
+)
+
+print(
+    "artifacts/svm_preprocessor.pkl"
+)
+
+print(
+    "artifacts/svm_label_encoder.pkl"
+)

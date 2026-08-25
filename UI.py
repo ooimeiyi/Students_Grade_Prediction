@@ -7,14 +7,15 @@ import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
     precision_score,
     recall_score
 )
-from sklearn.model_selection import train_test_split
 
+from sklearn.model_selection import train_test_split
 
 # ============================================================
 # SETTINGS
@@ -22,7 +23,6 @@ from sklearn.model_selection import train_test_split
 
 ARTIFACTS_DIR = "artifacts"
 DATA_FILE = "Students_Performance_Dataset_Clean.csv"
-
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -33,7 +33,6 @@ st.set_page_config(
     page_icon="🎓",
     layout="wide"
 )
-
 
 # ============================================================
 # LOAD MODELS AND ARTIFACTS
@@ -81,16 +80,18 @@ def load_artifacts():
 
         if (
             os.path.exists(model_path)
-            and
-            os.path.exists(preprocessor_path)
-            and
-            os.path.exists(encoder_path)
+            and os.path.exists(preprocessor_path)
+            and os.path.exists(encoder_path)
         ):
 
             artifacts[model_name] = {
                 "model": joblib.load(model_path),
-                "preprocessor": joblib.load(preprocessor_path),
-                "encoder": joblib.load(encoder_path)
+                "preprocessor": joblib.load(
+                    preprocessor_path
+                ),
+                "encoder": joblib.load(
+                    encoder_path
+                )
             }
 
     return artifacts
@@ -101,10 +102,17 @@ artifacts = load_artifacts()
 
 @st.cache_data
 def evaluate_saved_models():
+
     """Evaluate the saved artifacts on the same test split used for training."""
 
-    dataset = pd.read_csv(DATA_FILE)
-    features = dataset.drop(columns=["Grade"])
+    dataset = pd.read_csv(
+        DATA_FILE
+    )
+
+    features = dataset.drop(
+        columns=["Grade"]
+    )
+
     target = dataset["Grade"]
 
     _, test_features, _, test_target = train_test_split(
@@ -118,24 +126,48 @@ def evaluate_saved_models():
     results = []
 
     for name, artifact in artifacts.items():
-        encoded_prediction = artifact["model"].predict(
-            artifact["preprocessor"].transform(test_features)
+
+        encoded_prediction = artifact[
+            "model"
+        ].predict(
+            artifact["preprocessor"].transform(
+                test_features
+            )
         )
-        prediction = artifact["encoder"].inverse_transform(
+
+        prediction = artifact[
+            "encoder"
+        ].inverse_transform(
             encoded_prediction
         )
 
         results.append({
             "Model": name,
-            "Accuracy": accuracy_score(test_target, prediction),
+
+            "Accuracy": accuracy_score(
+                test_target,
+                prediction
+            ),
+
             "F1 Score": f1_score(
-                test_target, prediction, average="weighted", zero_division=0
+                test_target,
+                prediction,
+                average="weighted",
+                zero_division=0
             ),
+
             "Precision": precision_score(
-                test_target, prediction, average="weighted", zero_division=0
+                test_target,
+                prediction,
+                average="weighted",
+                zero_division=0
             ),
+
             "Recall": recall_score(
-                test_target, prediction, average="weighted", zero_division=0
+                test_target,
+                prediction,
+                average="weighted",
+                zero_division=0
             )
         })
 
@@ -158,32 +190,38 @@ if not artifacts:
 
     st.stop()
 
-
 # ============================================================
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title("🎓 Model Configuration")
+st.sidebar.title(
+    "🎓 Model Configuration"
+)
 
 current_view = st.sidebar.radio(
     "Choose a view",
-    ["Predict Grade", "Compare Models"],
+    [
+        "Predict Grade",
+        "Compare Models"
+    ],
     key="current_view"
 )
 
-show_comparison = current_view == "Compare Models"
-
+show_comparison = (
+    current_view == "Compare Models"
+)
 
 # ============================================================
 # TITLE
 # ============================================================
 
-st.title("🎓 Student Grade Prediction System")
+st.title(
+    "🎓 Student Grade Prediction System"
+)
 
 st.write(
     "Predict a student's final grade using machine learning."
 )
-
 
 # ============================================================
 # MODEL COMPARISON
@@ -191,7 +229,9 @@ st.write(
 
 if show_comparison:
 
-    st.header("📊 Model Comparison")
+    st.header(
+        "📊 Model Comparison"
+    )
 
     st.info(
         "Metrics are calculated from the saved models using the same "
@@ -210,57 +250,141 @@ if show_comparison:
         use_container_width=True
     )
 
-    model_names = ["XGBoost", "ANN", "SVM"]
+    model_names = [
+        "XGBoost",
+        "ANN",
+        "SVM"
+    ]
+
     short_names = {
         "XGBoost": "XGBoost",
         "ANN": "ANN",
         "SVM": "SVM"
     }
-    metric_labels = ["Accuracy", "F1 Score", "Precision", "Recall"]
-    pastel_colors = ["#8ECAE6", "#FFB4A2", "#BDE0A8"]
-    comparison_rows = comparison_df.set_index("Model").to_dict("index")
+
+    metric_labels = [
+        "Accuracy",
+        "F1 Score",
+        "Precision",
+        "Recall"
+    ]
+
+    pastel_colors = [
+        "#8ECAE6",
+        "#FFB4A2",
+        "#BDE0A8"
+    ]
+
+    comparison_rows = (
+        comparison_df
+        .set_index("Model")
+        .to_dict("index")
+    )
 
     models_present = [
-        model for model in model_names
+        model
+        for model in model_names
         if model in comparison_rows
     ]
-    labels = [short_names.get(model, model) for model in models_present]
 
-    for row_start in range(0, len(metric_labels), 3):
+    labels = [
+        short_names.get(
+            model,
+            model
+        )
+        for model in models_present
+    ]
+
+    for row_start in range(
+        0,
+        len(metric_labels),
+        3
+    ):
+
         columns = st.columns(3)
 
         for column, metric in zip(
             columns,
-            metric_labels[row_start:row_start + 3]
+            metric_labels[
+                row_start:row_start + 3
+            ]
         ):
+
             with column:
-                st.markdown(f"#### {metric}")
+
+                st.markdown(
+                    f"#### {metric}"
+                )
+
                 scores = [
-                    comparison_rows[model][metric]
+                    comparison_rows[
+                        model
+                    ][metric]
                     for model in models_present
                 ]
 
-                fig, ax = plt.subplots(figsize=(3.2, 3.8))
+                fig, ax = plt.subplots(
+                    figsize=(3.2, 3.8)
+                )
+
                 bars = ax.bar(
                     labels,
                     scores,
-                    color=pastel_colors[:len(models_present)],
+                    color=pastel_colors[
+                        :len(models_present)
+                    ],
                     width=0.7
                 )
-                ax.set_ylim(0.0, 1.0)
-                ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
-                ax.set_title(metric, fontsize=11, fontweight="bold", pad=10)
-                ax.set_ylabel(metric, fontsize=9)
-                ax.tick_params(axis="x", labelsize=8)
-                ax.tick_params(axis="y", labelsize=8)
+
+                ax.set_ylim(
+                    0.0,
+                    1.0
+                )
+
+                ax.set_yticks([
+                    0.0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    1.0
+                ])
+
+                ax.set_title(
+                    metric,
+                    fontsize=11,
+                    fontweight="bold",
+                    pad=10
+                )
+
+                ax.set_ylabel(
+                    metric,
+                    fontsize=9
+                )
+
+                ax.tick_params(
+                    axis="x",
+                    labelsize=8
+                )
+
+                ax.tick_params(
+                    axis="y",
+                    labelsize=8
+                )
 
                 for bar in bars:
+
                     height = bar.get_height()
 
                     if not pd.isna(height):
+
                         ax.annotate(
                             f"{height:.3f}",
-                            xy=(bar.get_x() + bar.get_width() / 2, height),
+                            xy=(
+                                bar.get_x()
+                                + bar.get_width() / 2,
+                                height
+                            ),
                             xytext=(0, 4),
                             textcoords="offset points",
                             ha="center",
@@ -269,14 +393,18 @@ if show_comparison:
                         )
 
                 fig.tight_layout()
+
                 st.pyplot(fig)
+
                 plt.close(fig)
 
     st.markdown("---")
 
-    st.sidebar.info("Choose **Predict Grade** above to return to model selection.")
-    st.stop()
+    st.sidebar.info(
+        "Choose **Predict Grade** above to return to model selection."
+    )
 
+    st.stop()
 
 # ============================================================
 # PREDICTION MODEL SELECTION
@@ -288,23 +416,31 @@ model_name = st.sidebar.selectbox(
     key="prediction_model"
 )
 
-selected_model = artifacts[model_name]["model"]
-selected_preprocessor = artifacts[model_name]["preprocessor"]
-selected_encoder = artifacts[model_name]["encoder"]
+selected_model = artifacts[
+    model_name
+]["model"]
+
+selected_preprocessor = artifacts[
+    model_name
+]["preprocessor"]
+
+selected_encoder = artifacts[
+    model_name
+]["encoder"]
 
 st.sidebar.success(
     f"Active Model: {model_name}"
 )
 
-
 # ============================================================
 # STUDENT INPUT
 # ============================================================
 
-st.header("📝 Student Information")
+st.header(
+    "📝 Student Information"
+)
 
 col1, col2, col3 = st.columns(3)
-
 
 # ============================================================
 # COLUMN 1
@@ -354,7 +490,6 @@ with col1:
         step=0.1
     )
 
-
 # ============================================================
 # COLUMN 2
 # ============================================================
@@ -400,7 +535,6 @@ with col2:
         value=70.0,
         step=0.1
     )
-
 
 # ============================================================
 # COLUMN 3
@@ -467,7 +601,6 @@ with col3:
         step=0.1
     )
 
-
 # ============================================================
 # PREDICTION BUTTON
 # ============================================================
@@ -479,7 +612,6 @@ predict_button = st.button(
     type="primary",
     use_container_width=True
 )
-
 
 # ============================================================
 # PREDICTION
@@ -515,20 +647,25 @@ if predict_button:
 
         "Study_Hours_per_Week": study_hours,
 
-        "Extracurricular_Activities": extracurricular,
+        "Extracurricular_Activities":
+            extracurricular,
 
-        "Internet_Access_at_Home": internet,
+        "Internet_Access_at_Home":
+            internet,
 
-        "Parent_Education_Level": parent_education,
+        "Parent_Education_Level":
+            parent_education,
 
-        "Family_Income_Level": family_income,
+        "Family_Income_Level":
+            family_income,
 
-        "Stress_Level (1-10)": stress,
+        "Stress_Level (1-10)":
+            stress,
 
-        "Sleep_Hours_per_Night": sleep
+        "Sleep_Hours_per_Night":
+            sleep
 
     }])
-
 
     # --------------------------------------------------------
     # PREPROCESS
@@ -550,19 +687,21 @@ if predict_button:
 
         st.stop()
 
-
     # --------------------------------------------------------
     # PREDICTION
     # --------------------------------------------------------
 
     try:
 
-        prediction_encoded = selected_model.predict(
-            processed_input
+        prediction_encoded = (
+            selected_model.predict(
+                processed_input
+            )
         )
 
         predicted_grade = (
-            selected_encoder.inverse_transform(
+            selected_encoder
+            .inverse_transform(
                 prediction_encoded
             )[0]
         )
@@ -575,15 +714,15 @@ if predict_button:
 
         st.stop()
 
-
     # ========================================================
     # DISPLAY RESULT
     # ========================================================
 
     st.markdown("---")
 
-    st.header("🎯 Prediction Result")
-
+    st.header(
+        "🎯 Prediction Result"
+    )
 
     # --------------------------------------------------------
     # GRADE DISPLAY
@@ -613,11 +752,9 @@ if predict_button:
             f"## Predicted Grade: {predicted_grade}"
         )
 
-
     st.write(
         f"**Model Used:** {model_name}"
     )
-
 
     # ========================================================
     # PREDICTION PROBABILITY
@@ -631,7 +768,8 @@ if predict_button:
         try:
 
             probabilities = (
-                selected_model.predict_proba(
+                selected_model
+                .predict_proba(
                     processed_input
                 )[0]
             )
@@ -641,19 +779,17 @@ if predict_button:
             )
 
             probability_df = pd.DataFrame({
-
                 "Grade": class_names,
-
                 "Probability": probabilities
-
             })
 
             probability_df[
                 "Probability"
-            ] = probability_df[
-                "Probability"
-            ] * 100
-
+            ] = (
+                probability_df[
+                    "Probability"
+                ] * 100
+            )
 
             st.subheader(
                 "Prediction Confidence"
@@ -666,7 +802,6 @@ if predict_button:
                 use_container_width=True
             )
 
-
             st.bar_chart(
                 probability_df.set_index(
                     "Grade"
@@ -675,7 +810,6 @@ if predict_button:
 
         except Exception:
             pass
-
 
     # ========================================================
     # STUDENT SUMMARY
@@ -686,7 +820,6 @@ if predict_button:
     )
 
     summary_col1, summary_col2 = st.columns(2)
-
 
     with summary_col1:
 
@@ -710,7 +843,6 @@ if predict_button:
             f"**Quizzes:** {quizzes:.1f}"
         )
 
-
     with summary_col2:
 
         st.write(
@@ -722,7 +854,8 @@ if predict_button:
         )
 
         st.write(
-            f"**Study Hours:** {study_hours:.1f} hours/week"
+            f"**Study Hours:** "
+            f"{study_hours:.1f} hours/week"
         )
 
         st.write(

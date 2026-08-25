@@ -30,7 +30,6 @@ from sklearn.metrics import (
 
 from xgboost import XGBClassifier
 
-
 # ============================================================
 # SETTINGS
 # ============================================================
@@ -39,15 +38,16 @@ FILE_NAME = "Students_Performance_Dataset_Clean.csv"
 ARTIFACTS_DIR = "artifacts"
 TARGET = "Grade"
 
-os.makedirs(ARTIFACTS_DIR, exist_ok=True)
-
+os.makedirs(
+    ARTIFACTS_DIR,
+    exist_ok=True
+)
 
 # ============================================================
 # 1. LOAD DATASET
 # ============================================================
 
 df = pd.read_csv(FILE_NAME)
-
 
 # ============================================================
 # 2. REMOVE UNNECESSARY COLUMNS
@@ -68,16 +68,19 @@ remove_columns = [
     if col in df.columns
 ]
 
-df = df.drop(columns=remove_columns)
-
+df = df.drop(
+    columns=remove_columns
+)
 
 # ============================================================
 # 3. SEPARATE FEATURES AND TARGET
 # ============================================================
 
-X = df.drop(columns=[TARGET])
-y = df[TARGET]
+X = df.drop(
+    columns=[TARGET]
+)
 
+y = df[TARGET]
 
 # ============================================================
 # 4. ENCODE TARGET
@@ -87,8 +90,9 @@ label_encoder = LabelEncoder()
 
 y = label_encoder.fit_transform(y)
 
-num_classes = len(label_encoder.classes_)
-
+num_classes = len(
+    label_encoder.classes_
+)
 
 # ============================================================
 # OUTPUT
@@ -101,7 +105,6 @@ print("============================================")
 print("\nGrade classes:")
 print(label_encoder.classes_)
 
-
 # ============================================================
 # 5. FEATURE TYPES
 # ============================================================
@@ -111,9 +114,13 @@ numeric_features = X.select_dtypes(
 ).columns.tolist()
 
 categorical_features = X.select_dtypes(
-    include=["object", "category", "bool", "string"]
+    include=[
+        "object",
+        "category",
+        "bool",
+        "string"
+    ]
 ).columns.tolist()
-
 
 # ============================================================
 # 6. PREPROCESSING
@@ -123,7 +130,9 @@ numeric_transformer = Pipeline(
     steps=[
         (
             "imputer",
-            SimpleImputer(strategy="median")
+            SimpleImputer(
+                strategy="median"
+            )
         )
     ]
 )
@@ -132,7 +141,9 @@ categorical_transformer = Pipeline(
     steps=[
         (
             "imputer",
-            SimpleImputer(strategy="most_frequent")
+            SimpleImputer(
+                strategy="most_frequent"
+            )
         ),
         (
             "onehot",
@@ -159,7 +170,6 @@ preprocessor = ColumnTransformer(
     ]
 )
 
-
 # ============================================================
 # 7. TRAIN / TEST SPLIT
 # ============================================================
@@ -172,17 +182,27 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-print("\nTraining samples:", len(X_train))
-print("Testing samples :", len(X_test))
+print(
+    "\nTraining samples:",
+    len(X_train)
+)
 
+print(
+    "Testing samples :",
+    len(X_test)
+)
 
 # ============================================================
 # 8. PREPROCESS
 # ============================================================
 
-X_train_processed = preprocessor.fit_transform(X_train)
-X_test_processed = preprocessor.transform(X_test)
+X_train_processed = preprocessor.fit_transform(
+    X_train
+)
 
+X_test_processed = preprocessor.transform(
+    X_test
+)
 
 # ============================================================
 # 9. EVALUATION FUNCTION
@@ -217,7 +237,6 @@ def evaluate_model(y_true, y_pred):
             zero_division=0
         )
     }
-
 
 # ============================================================
 # 10. BEFORE FINE-TUNING
@@ -254,7 +273,6 @@ before_results = evaluate_model(
     baseline_pred
 )
 
-
 print("\n============================================")
 print("BEFORE FINE-TUNING")
 print("============================================")
@@ -272,9 +290,8 @@ print(
 )
 
 print(
-    f"Recall   : {before_results['Recall']:.4f}"
+    f"Recall : {before_results['Recall']:.4f}"
 )
-
 
 # ============================================================
 # 11. FINE-TUNING
@@ -284,47 +301,77 @@ print("\n============================================")
 print("FINE-TUNING XGBOOST")
 print("============================================")
 
-
 param_grid = {
-
     "n_estimators": [
-        100, 200, 300, 400, 500
+        100,
+        200,
+        300,
+        400,
+        500
     ],
 
     "max_depth": [
-        2, 3, 4, 5, 6
+        2,
+        3,
+        4,
+        5,
+        6
     ],
 
     "learning_rate": [
-        0.01, 0.03, 0.05,
-        0.08, 0.10, 0.15
+        0.01,
+        0.03,
+        0.05,
+        0.08,
+        0.10,
+        0.15
     ],
 
     "min_child_weight": [
-        1, 3, 5, 7, 10
+        1,
+        3,
+        5,
+        7,
+        10
     ],
 
     "gamma": [
-        0, 0.1, 0.3, 0.5, 1
+        0,
+        0.1,
+        0.3,
+        0.5,
+        1
     ],
 
     "subsample": [
-        0.7, 0.8, 0.9, 1.0
+        0.7,
+        0.8,
+        0.9,
+        1.0
     ],
 
     "colsample_bytree": [
-        0.7, 0.8, 0.9, 1.0
+        0.7,
+        0.8,
+        0.9,
+        1.0
     ],
 
     "reg_alpha": [
-        0, 0.01, 0.1, 1
+        0,
+        0.01,
+        0.1,
+        1
     ],
 
     "reg_lambda": [
-        1, 2, 5, 10, 20
+        1,
+        2,
+        5,
+        10,
+        20
     ]
 }
-
 
 tuning_model = XGBClassifier(
     objective="multi:softprob",
@@ -334,13 +381,11 @@ tuning_model = XGBClassifier(
     n_jobs=-1
 )
 
-
 cv = StratifiedKFold(
     n_splits=3,
     shuffle=True,
     random_state=42
 )
-
 
 random_search = RandomizedSearchCV(
     estimator=tuning_model,
@@ -353,12 +398,10 @@ random_search = RandomizedSearchCV(
     n_jobs=-1
 )
 
-
 random_search.fit(
     X_train_processed,
     y_train
 )
-
 
 # ============================================================
 # 12. BEST MODEL
@@ -371,7 +414,6 @@ print(
     f"\nBest CV F1 Score: "
     f"{random_search.best_score_:.4f}"
 )
-
 
 # ============================================================
 # 13. AFTER FINE-TUNING
@@ -387,7 +429,6 @@ after_results = evaluate_model(
     y_test,
     tuned_pred
 )
-
 
 print("\n============================================")
 print("AFTER FINE-TUNING")
@@ -406,9 +447,8 @@ print(
 )
 
 print(
-    f"Recall   : {after_results['Recall']:.4f}"
+    f"Recall : {after_results['Recall']:.4f}"
 )
-
 
 # ============================================================
 # 14. BEFORE VS AFTER
@@ -427,7 +467,6 @@ print(
 
 print("-" * 54)
 
-
 for metric in [
     "Accuracy",
     "F1",
@@ -437,6 +476,7 @@ for metric in [
 
     before = before_results[metric]
     after = after_results[metric]
+
     improvement = after - before
 
     print(
@@ -445,7 +485,6 @@ for metric in [
         f"{after:>12.4f}"
         f"{improvement:>15.4f}"
     )
-
 
 # ============================================================
 # 15. SAVE ARTIFACTS
@@ -475,11 +514,18 @@ joblib.dump(
     )
 )
 
-
 print("\n============================================")
 print("XGBOOST ARTIFACTS SAVED")
 print("============================================")
 
-print("artifacts/xgboost_grade_model.pkl")
-print("artifacts/xgboost_preprocessor.pkl")
-print("artifacts/xgboost_label_encoder.pkl")
+print(
+    "artifacts/xgboost_grade_model.pkl"
+)
+
+print(
+    "artifacts/xgboost_preprocessor.pkl"
+)
+
+print(
+    "artifacts/xgboost_label_encoder.pkl"
+)
