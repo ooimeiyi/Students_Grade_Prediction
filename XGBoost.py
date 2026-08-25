@@ -6,12 +6,6 @@ import os
 import joblib
 import pandas as pd
 
-from sklearn.model_selection import (
-    train_test_split,
-    RandomizedSearchCV,
-    StratifiedKFold
-)
-
 from sklearn.preprocessing import (
     LabelEncoder,
     OneHotEncoder
@@ -20,6 +14,11 @@ from sklearn.preprocessing import (
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
+
+from sklearn.model_selection import (
+    RandomizedSearchCV,
+    StratifiedKFold
+)
 
 from sklearn.metrics import (
     accuracy_score,
@@ -30,11 +29,11 @@ from sklearn.metrics import (
 
 from xgboost import XGBClassifier
 
+
 # ============================================================
 # SETTINGS
 # ============================================================
 
-FILE_NAME = "Students_Performance_Dataset_Clean.csv"
 ARTIFACTS_DIR = "artifacts"
 TARGET = "Grade"
 
@@ -43,56 +42,39 @@ os.makedirs(
     exist_ok=True
 )
 
-# ============================================================
-# 1. LOAD DATASET
-# ============================================================
-
-df = pd.read_csv(FILE_NAME)
 
 # ============================================================
-# 2. REMOVE UNNECESSARY COLUMNS
+# 1. LOAD PREPROCESSED TRAIN / TEST DATA
 # ============================================================
 
-remove_columns = [
-    "Student_ID",
-    "StudentID",
-    "ID",
-    "First_Name",
-    "Last_Name",
-    "Email",
-    "Total_Score"
-]
-
-remove_columns = [
-    col for col in remove_columns
-    if col in df.columns
-]
-
-df = df.drop(
-    columns=remove_columns
+X_train = pd.read_csv(
+    os.path.join(
+        ARTIFACTS_DIR,
+        "X_train_raw.csv"
+    )
 )
 
-# ============================================================
-# 3. SEPARATE FEATURES AND TARGET
-# ============================================================
-
-X = df.drop(
-    columns=[TARGET]
+X_test = pd.read_csv(
+    os.path.join(
+        ARTIFACTS_DIR,
+        "X_test_raw.csv"
+    )
 )
 
-y = df[TARGET]
+y_train = pd.read_csv(
+    os.path.join(
+        ARTIFACTS_DIR,
+        "y_train.csv"
+    )
+)[TARGET]
 
-# ============================================================
-# 4. ENCODE TARGET
-# ============================================================
+y_test = pd.read_csv(
+    os.path.join(
+        ARTIFACTS_DIR,
+        "y_test.csv"
+    )
+)[TARGET]
 
-label_encoder = LabelEncoder()
-
-y = label_encoder.fit_transform(y)
-
-num_classes = len(
-    label_encoder.classes_
-)
 
 # ============================================================
 # OUTPUT
@@ -102,18 +84,128 @@ print("============================================")
 print("XGBOOST STUDENT GRADE PREDICTION")
 print("============================================")
 
+print("\nLoaded preprocessing artifacts:")
+
+print(" - artifacts/X_train_raw.csv")
+print(" - artifacts/X_test_raw.csv")
+print(" - artifacts/y_train.csv")
+print(" - artifacts/y_test.csv")
+
+
+print("\nTraining samples:")
+print(len(X_train))
+
+print("Testing samples :")
+print(len(X_test))
+
+
+# ============================================================
+# 2. LOAD FEATURE COLUMNS
+# ============================================================
+
+feature_columns_path = os.path.join(
+    ARTIFACTS_DIR,
+    "feature_columns.joblib"
+)
+
+if os.path.exists(feature_columns_path):
+
+    feature_columns = joblib.load(
+        feature_columns_path
+    )
+
+    print("\nFeature columns loaded from:")
+    print(" - artifacts/feature_columns.joblib")
+
+    # Ensure the same feature order as preprocessing
+    X_train = X_train[feature_columns]
+    X_test = X_test[feature_columns]
+
+else:
+
+    feature_columns = X_train.columns.tolist()
+
+    print(
+        "\nWARNING: feature_columns.joblib not found."
+    )
+
+    print(
+        "Using columns from X_train_raw.csv."
+    )
+
+
+# ============================================================
+# 3. CHECK TARGET
+# ============================================================
+
+if TARGET in X_train.columns:
+
+    raise ValueError(
+        "ERROR: Grade target column is present "
+        "inside X_train."
+    )
+
+
+if TARGET in X_test.columns:
+
+    raise ValueError(
+        "ERROR: Grade target column is present "
+        "inside X_test."
+    )
+
+
+# ============================================================
+# 4. CHECK TRAIN / TEST COLUMNS
+# ============================================================
+
+if list(X_train.columns) != list(X_test.columns):
+
+    raise ValueError(
+        "ERROR: Training and testing feature "
+        "columns do not match."
+    )
+
+
+print("\nFeature count:")
+print(len(X_train.columns))
+
+
+# ============================================================
+# 5. ENCODE TARGET
+# ============================================================
+
+label_encoder = LabelEncoder()
+
+y_train_encoded = label_encoder.fit_transform(
+    y_train
+)
+
+y_test_encoded = label_encoder.transform(
+    y_test
+)
+
+num_classes = len(
+    label_encoder.classes_
+)
+
+
 print("\nGrade classes:")
 print(label_encoder.classes_)
 
+
 # ============================================================
-# 5. FEATURE TYPES
+# 6. FEATURE TYPES
 # ============================================================
 
-numeric_features = X.select_dtypes(
-    include=["int64", "float64"]
+numeric_features = X_train.select_dtypes(
+    include=[
+        "int64",
+        "float64"
+    ]
 ).columns.tolist()
 
-categorical_features = X.select_dtypes(
+
+categorical_features = X_train.select_dtypes(
     include=[
         "object",
         "category",
@@ -122,8 +214,21 @@ categorical_features = X.select_dtypes(
     ]
 ).columns.tolist()
 
+
+print("\nNumeric features:")
+
+for column in numeric_features:
+    print(" -", column)
+
+
+print("\nCategorical features:")
+
+for column in categorical_features:
+    print(" -", column)
+
+
 # ============================================================
-# 6. PREPROCESSING
+# 7. PREPROCESSING
 # ============================================================
 
 numeric_transformer = Pipeline(
@@ -137,6 +242,7 @@ numeric_transformer = Pipeline(
     ]
 )
 
+
 categorical_transformer = Pipeline(
     steps=[
         (
@@ -145,6 +251,7 @@ categorical_transformer = Pipeline(
                 strategy="most_frequent"
             )
         ),
+
         (
             "onehot",
             OneHotEncoder(
@@ -155,6 +262,7 @@ categorical_transformer = Pipeline(
     ]
 )
 
+
 preprocessor = ColumnTransformer(
     transformers=[
         (
@@ -162,6 +270,7 @@ preprocessor = ColumnTransformer(
             numeric_transformer,
             numeric_features
         ),
+
         (
             "cat",
             categorical_transformer,
@@ -170,47 +279,48 @@ preprocessor = ColumnTransformer(
     ]
 )
 
-# ============================================================
-# 7. TRAIN / TEST SPLIT
-# ============================================================
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.20,
-    random_state=42,
-    stratify=y
-)
-
-print(
-    "\nTraining samples:",
-    len(X_train)
-)
-
-print(
-    "Testing samples :",
-    len(X_test)
-)
 
 # ============================================================
-# 8. PREPROCESS
+# 8. PREPROCESS TRAIN / TEST
 # ============================================================
+
+print("\n============================================")
+print("MODEL-SPECIFIC PREPROCESSING")
+print("============================================")
+
 
 X_train_processed = preprocessor.fit_transform(
     X_train
 )
 
+
 X_test_processed = preprocessor.transform(
     X_test
 )
+
+
+print(
+    "\nProcessed training shape:",
+    X_train_processed.shape
+)
+
+print(
+    "Processed testing shape :",
+    X_test_processed.shape
+)
+
 
 # ============================================================
 # 9. EVALUATION FUNCTION
 # ============================================================
 
-def evaluate_model(y_true, y_pred):
+def evaluate_model(
+    y_true,
+    y_pred
+):
 
     return {
+
         "Accuracy": accuracy_score(
             y_true,
             y_pred
@@ -238,60 +348,93 @@ def evaluate_model(y_true, y_pred):
         )
     }
 
+
 # ============================================================
 # 10. BEFORE FINE-TUNING
 # ============================================================
 
+print("\n============================================")
+print("BASELINE XGBOOST")
+print("============================================")
+
+
 baseline_model = XGBClassifier(
+
     n_estimators=300,
+
     max_depth=5,
+
     learning_rate=0.05,
+
     min_child_weight=1,
+
     gamma=0,
+
     subsample=0.8,
+
     colsample_bytree=0.8,
+
     reg_alpha=0,
+
     reg_lambda=1,
+
     objective="multi:softprob",
+
     num_class=num_classes,
+
     eval_metric="mlogloss",
+
     random_state=42,
+
     n_jobs=-1
 )
 
+
 baseline_model.fit(
     X_train_processed,
-    y_train
+    y_train_encoded
 )
+
 
 baseline_pred = baseline_model.predict(
     X_test_processed
 )
 
+
 before_results = evaluate_model(
-    y_test,
+    y_test_encoded,
     baseline_pred
 )
+
 
 print("\n============================================")
 print("BEFORE FINE-TUNING")
 print("============================================")
 
-print(
-    f"Accuracy : {before_results['Accuracy']:.4f}"
-)
 
 print(
-    f"F1 Score : {before_results['F1']:.4f}"
+    f"Accuracy : "
+    f"{before_results['Accuracy']:.4f}"
 )
 
-print(
-    f"Precision: {before_results['Precision']:.4f}"
-)
 
 print(
-    f"Recall : {before_results['Recall']:.4f}"
+    f"F1 Score : "
+    f"{before_results['F1']:.4f}"
 )
+
+
+print(
+    f"Precision: "
+    f"{before_results['Precision']:.4f}"
+)
+
+
+print(
+    f"Recall   : "
+    f"{before_results['Recall']:.4f}"
+)
+
 
 # ============================================================
 # 11. FINE-TUNING
@@ -301,7 +444,9 @@ print("\n============================================")
 print("FINE-TUNING XGBOOST")
 print("============================================")
 
+
 param_grid = {
+
     "n_estimators": [
         100,
         200,
@@ -373,47 +518,80 @@ param_grid = {
     ]
 }
 
+
 tuning_model = XGBClassifier(
+
     objective="multi:softprob",
+
     num_class=num_classes,
+
     eval_metric="mlogloss",
+
     random_state=42,
+
     n_jobs=-1
 )
 
+
 cv = StratifiedKFold(
+
     n_splits=3,
+
     shuffle=True,
+
     random_state=42
 )
 
+
 random_search = RandomizedSearchCV(
+
     estimator=tuning_model,
+
     param_distributions=param_grid,
+
     n_iter=50,
+
     scoring="f1_weighted",
+
     cv=cv,
+
     verbose=0,
+
     random_state=42,
+
     n_jobs=-1
 )
 
+
 random_search.fit(
+
     X_train_processed,
-    y_train
+
+    y_train_encoded
 )
+
 
 # ============================================================
 # 12. BEST MODEL
 # ============================================================
 
+print("\n============================================")
+print("BEST XGBOOST MODEL")
+print("============================================")
+
+
 print("\nBest Parameters:")
-print(random_search.best_params_)
+
+print(
+    random_search.best_params_
+)
+
 
 print(
     f"\nBest CV F1 Score: "
     f"{random_search.best_score_:.4f}"
 )
+
 
 # ============================================================
 # 13. AFTER FINE-TUNING
@@ -421,34 +599,48 @@ print(
 
 best_model = random_search.best_estimator_
 
+
 tuned_pred = best_model.predict(
     X_test_processed
 )
 
+
 after_results = evaluate_model(
-    y_test,
+
+    y_test_encoded,
+
     tuned_pred
 )
+
 
 print("\n============================================")
 print("AFTER FINE-TUNING")
 print("============================================")
 
-print(
-    f"Accuracy : {after_results['Accuracy']:.4f}"
-)
 
 print(
-    f"F1 Score : {after_results['F1']:.4f}"
+    f"Accuracy : "
+    f"{after_results['Accuracy']:.4f}"
 )
 
-print(
-    f"Precision: {after_results['Precision']:.4f}"
-)
 
 print(
-    f"Recall : {after_results['Recall']:.4f}"
+    f"F1 Score : "
+    f"{after_results['F1']:.4f}"
 )
+
+
+print(
+    f"Precision: "
+    f"{after_results['Precision']:.4f}"
+)
+
+
+print(
+    f"Recall   : "
+    f"{after_results['Recall']:.4f}"
+)
+
 
 # ============================================================
 # 14. BEFORE VS AFTER
@@ -458,6 +650,7 @@ print("\n============================================")
 print("BEFORE vs AFTER FINE-TUNING")
 print("============================================")
 
+
 print(
     f"{'Metric':<15}"
     f"{'Before':>12}"
@@ -465,67 +658,176 @@ print(
     f"{'Improvement':>15}"
 )
 
-print("-" * 54)
+
+print(
+    "-" * 54
+)
+
 
 for metric in [
+
     "Accuracy",
+
     "F1",
+
     "Precision",
+
     "Recall"
+
 ]:
 
-    before = before_results[metric]
-    after = after_results[metric]
+    before = before_results[
+        metric
+    ]
+
+    after = after_results[
+        metric
+    ]
 
     improvement = after - before
 
     print(
+
         f"{metric:<15}"
+
         f"{before:>12.4f}"
+
         f"{after:>12.4f}"
+
         f"{improvement:>15.4f}"
     )
+
 
 # ============================================================
 # 15. SAVE ARTIFACTS
 # ============================================================
 
 joblib.dump(
+
     best_model,
+
     os.path.join(
+
         ARTIFACTS_DIR,
+
         "xgboost_grade_model.pkl"
     )
 )
 
+
 joblib.dump(
+
     preprocessor,
+
     os.path.join(
+
         ARTIFACTS_DIR,
+
         "xgboost_preprocessor.pkl"
     )
 )
 
+
 joblib.dump(
+
     label_encoder,
+
     os.path.join(
+
         ARTIFACTS_DIR,
+
         "xgboost_label_encoder.pkl"
     )
 )
+
+
+# ============================================================
+# 16. SAVE MODEL FEATURES
+# ============================================================
+
+joblib.dump(
+
+    feature_columns,
+
+    os.path.join(
+
+        ARTIFACTS_DIR,
+
+        "xgboost_feature_columns.joblib"
+    )
+)
+
+
+# ============================================================
+# 17. FINAL OUTPUT
+# ============================================================
 
 print("\n============================================")
 print("XGBOOST ARTIFACTS SAVED")
 print("============================================")
 
+
 print(
     "artifacts/xgboost_grade_model.pkl"
 )
+
 
 print(
     "artifacts/xgboost_preprocessor.pkl"
 )
 
+
 print(
     "artifacts/xgboost_label_encoder.pkl"
 )
+
+
+print(
+    "artifacts/xgboost_feature_columns.joblib"
+)
+
+
+print("\n============================================")
+print("DATA SOURCE CHECK")
+print("============================================")
+
+
+print(
+    "Training data:"
+)
+
+print(
+    " - artifacts/X_train_raw.csv"
+)
+
+
+print(
+    "Testing data:"
+)
+
+print(
+    " - artifacts/X_test_raw.csv"
+)
+
+
+print(
+    "Training target:"
+)
+
+print(
+    " - artifacts/y_train.csv"
+)
+
+
+print(
+    "Testing target:"
+)
+
+print(
+    " - artifacts/y_test.csv"
+)
+
+
+print("\n============================================")
+print("XGBOOST TRAINING COMPLETE")
+print("============================================")
