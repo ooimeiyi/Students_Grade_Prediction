@@ -1,5 +1,5 @@
 # ============================================================
-# ANN GRADE PREDICTION
+# SVM GRADE PREDICTION
 # ============================================================
 
 import os
@@ -23,7 +23,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 
-from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
 
 from sklearn.metrics import (
     accuracy_score,
@@ -97,7 +97,7 @@ y = label_encoder.fit_transform(y)
 # ============================================================
 
 print("============================================")
-print("ANN STUDENT GRADE PREDICTION")
+print("SVM STUDENT GRADE PREDICTION")
 print("============================================")
 
 print("\nGrade classes:")
@@ -230,18 +230,10 @@ def evaluate_model(y_true, y_pred):
 # 10. BEFORE FINE-TUNING
 # ============================================================
 
-baseline_model = MLPClassifier(
-    hidden_layer_sizes=(64, 32),
-    activation="relu",
-    solver="adam",
-    alpha=0.0001,
-    batch_size=32,
-    learning_rate_init=0.001,
-    max_iter=500,
-    early_stopping=True,
-    validation_fraction=0.1,
-    n_iter_no_change=20,
-    random_state=42
+baseline_model = SVC(
+    C=1,
+    kernel="rbf",
+    gamma="scale"
 )
 
 
@@ -288,58 +280,52 @@ print(
 # ============================================================
 
 print("\n============================================")
-print("FINE-TUNING ANN")
+print("FINE-TUNING SVM")
 print("============================================")
 
 
 param_grid = {
 
-    "hidden_layer_sizes": [
-        (32,),
-        (64,),
-        (128,),
-        (64, 32),
-        (128, 64),
-        (128, 64, 32)
+    "C": [
+        0.1,
+        0.5,
+        1,
+        5,
+        10,
+        20,
+        50,
+        100
     ],
 
-    "activation": [
-        "relu",
-        "tanh"
+    "kernel": [
+        "rbf",
+        "poly",
+        "sigmoid"
     ],
 
-    "alpha": [
-        0.00001,
+    "gamma": [
+        "scale",
+        "auto",
         0.0001,
         0.001,
-        0.01
+        0.01,
+        0.1
     ],
 
-    "learning_rate_init": [
-        0.0001,
-        0.0005,
-        0.001,
-        0.005,
-        0.01
+    "degree": [
+        2,
+        3,
+        4
     ],
 
-    "batch_size": [
-        16,
-        32,
-        64,
-        128
+    "class_weight": [
+        None,
+        "balanced"
     ]
 }
 
 
-tuning_model = MLPClassifier(
-    solver="adam",
-    max_iter=500,
-    early_stopping=True,
-    validation_fraction=0.1,
-    n_iter_no_change=20,
-    random_state=42
-)
+tuning_model = SVC()
 
 
 cv = StratifiedKFold(
@@ -462,7 +448,7 @@ joblib.dump(
     best_model,
     os.path.join(
         ARTIFACTS_DIR,
-        "ann_grade_model.pkl"
+        "svm_grade_model.pkl"
     )
 )
 
@@ -470,7 +456,7 @@ joblib.dump(
     preprocessor,
     os.path.join(
         ARTIFACTS_DIR,
-        "ann_preprocessor.pkl"
+        "svm_preprocessor.pkl"
     )
 )
 
@@ -478,15 +464,15 @@ joblib.dump(
     label_encoder,
     os.path.join(
         ARTIFACTS_DIR,
-        "ann_label_encoder.pkl"
+        "svm_label_encoder.pkl"
     )
 )
 
 
 print("\n============================================")
-print("ANN ARTIFACTS SAVED")
+print("SVM ARTIFACTS SAVED")
 print("============================================")
 
-print("artifacts/ann_grade_model.pkl")
-print("artifacts/ann_preprocessor.pkl")
-print("artifacts/ann_label_encoder.pkl")
+print("artifacts/svm_grade_model.pkl")
+print("artifacts/svm_preprocessor.pkl")
+print("artifacts/svm_label_encoder.pkl")
