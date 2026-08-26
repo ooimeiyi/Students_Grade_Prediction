@@ -8,14 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score
-)
-
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 
 # ============================================================
@@ -23,18 +16,13 @@ from sklearn.model_selection import train_test_split
 # ============================================================
 
 ARTIFACTS_DIR = "artifacts"
-DATA_FILE = "Students_Performance_Dataset_Clean.csv"
 
 
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
 
-st.set_page_config(
-    page_title="Student Grade Prediction",
-    page_icon="🎓",
-    layout="wide"
-)
+st.set_page_config(page_title="Student Grade Prediction", page_icon="🎓", layout="wide")
 
 
 # ============================================================
@@ -43,7 +31,6 @@ st.set_page_config(
 
 @st.cache_resource
 def load_artifacts():
-
     artifacts = {}
 
     model_files = {
@@ -65,40 +52,15 @@ def load_artifacts():
     }
 
     for model_name in model_files:
+        model_path = os.path.join(ARTIFACTS_DIR, model_files[model_name])
+        preprocessor_path = os.path.join(ARTIFACTS_DIR, preprocessor_files[model_name])
+        encoder_path = os.path.join(ARTIFACTS_DIR, encoder_files[model_name])
 
-        model_path = os.path.join(
-            ARTIFACTS_DIR,
-            model_files[model_name]
-        )
-
-        preprocessor_path = os.path.join(
-            ARTIFACTS_DIR,
-            preprocessor_files[model_name]
-        )
-
-        encoder_path = os.path.join(
-            ARTIFACTS_DIR,
-            encoder_files[model_name]
-        )
-
-        if (
-            os.path.exists(model_path)
-            and os.path.exists(preprocessor_path)
-            and os.path.exists(encoder_path)
-        ):
-
+        if os.path.exists(model_path) and os.path.exists(preprocessor_path) and os.path.exists(encoder_path):
             artifacts[model_name] = {
-                "model": joblib.load(
-                    model_path
-                ),
-
-                "preprocessor": joblib.load(
-                    preprocessor_path
-                ),
-
-                "encoder": joblib.load(
-                    encoder_path
-                )
+                "model": joblib.load(model_path),
+                "preprocessor": joblib.load(preprocessor_path),
+                "encoder": joblib.load(encoder_path)
             }
 
     return artifacts
@@ -108,137 +70,65 @@ artifacts = load_artifacts()
 
 
 # ============================================================
+# CHECK ARTIFACTS
+# ============================================================
+
+if not artifacts:
+    st.error("No trained models were found in the artifacts folder.")
+    st.write("Please run XGBoost.py, ANN.py and SVM.py first.")
+    st.stop()
+
+
+# ============================================================
 # EVALUATE SAVED MODELS
 # ============================================================
 
 @st.cache_data
 def evaluate_saved_models():
-
-    """
-    Evaluate the saved models on the same
-    test split used during training.
-    """
-
-    X_test = pd.read_csv(
-        os.path.join(
-            ARTIFACTS_DIR,
-            "X_test_raw.csv"
-        )
-    )
-
-    y_test = pd.read_csv(
-        os.path.join(
-            ARTIFACTS_DIR,
-            "y_test.csv"
-        )
-    )["Grade"]
+    X_test = pd.read_csv(os.path.join(ARTIFACTS_DIR, "X_test_raw.csv"))
+    y_test = pd.read_csv(os.path.join(ARTIFACTS_DIR, "y_test.csv"))["Grade"]
 
     results = []
 
     for name, artifact in artifacts.items():
-
-        encoded_prediction = (
-            artifact["model"].predict(
-                artifact["preprocessor"].transform(
-                    X_test
-                )
-            )
+        encoded_prediction = artifact["model"].predict(
+            artifact["preprocessor"].transform(X_test)
         )
 
-        prediction = (
-            artifact["encoder"]
-            .inverse_transform(
-                encoded_prediction
-            )
-        )
+        prediction = artifact["encoder"].inverse_transform(encoded_prediction)
 
         results.append({
-
             "Model": name,
-
-            "Accuracy": accuracy_score(
-                y_test,
-                prediction
-            ),
-
-            "F1 Score": f1_score(
-                y_test,
-                prediction,
-                average="weighted",
-                zero_division=0
-            ),
-
-            "Precision": precision_score(
-                y_test,
-                prediction,
-                average="weighted",
-                zero_division=0
-            ),
-
-            "Recall": recall_score(
-                y_test,
-                prediction,
-                average="weighted",
-                zero_division=0
-            )
-
+            "Accuracy": accuracy_score(y_test, prediction),
+            "F1 Score": f1_score(y_test, prediction, average="weighted", zero_division=0),
+            "Precision": precision_score(y_test, prediction, average="weighted", zero_division=0),
+            "Recall": recall_score(y_test, prediction, average="weighted", zero_division=0)
         })
 
-    return pd.DataFrame(
-        results
-    )
-
-
-# ============================================================
-# CHECK ARTIFACTS
-# ============================================================
-
-if not artifacts:
-
-    st.error(
-        "No trained models were found in the artifacts folder."
-    )
-
-    st.write(
-        "Please run XGBoost.py, ANN.py and SVM.py first."
-    )
-
-    st.stop()
+    return pd.DataFrame(results)
 
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title(
-    "🎓 Model Configuration"
-)
+st.sidebar.title("🎓 Model Configuration")
 
 current_view = st.sidebar.radio(
     "Choose a view",
-    [
-        "Predict Grade",
-        "Compare Models"
-    ],
+    ["Predict Grade", "Compare Models"],
     key="current_view"
 )
 
-show_comparison = (
-    current_view == "Compare Models"
-)
+show_comparison = current_view == "Compare Models"
 
 
 # ============================================================
 # TITLE
 # ============================================================
 
-st.title(
-    "🎓 Student Grade Prediction System"
-)
-
-st.write(
-    "Predict a student's final grade using machine learning."
-)
+st.title("🎓 Student Grade Prediction System")
+st.write("Predict a student's final grade using machine learning.")
 
 
 # ============================================================
@@ -246,10 +136,7 @@ st.write(
 # ============================================================
 
 if show_comparison:
-
-    st.header(
-        "📊 Model Comparison"
-    )
+    st.header("📊 Model Comparison")
 
     comparison_df = evaluate_saved_models()
 
@@ -263,141 +150,49 @@ if show_comparison:
         use_container_width=True
     )
 
-    model_names = [
-        "XGBoost",
-        "ANN",
-        "SVM"
-    ]
+    model_names = ["XGBoost", "ANN", "SVM"]
 
-    short_names = {
-        "XGBoost": "XGBoost",
-        "ANN": "ANN",
-        "SVM": "SVM"
-    }
+    metric_labels = ["Accuracy", "F1 Score", "Precision", "Recall"]
 
-    metric_labels = [
-        "Accuracy",
-        "F1 Score",
-        "Precision",
-        "Recall"
-    ]
+    pastel_colors = ["#8ECAE6", "#FFB4A2", "#BDE0A8"]
 
-    pastel_colors = [
-        "#8ECAE6",
-        "#FFB4A2",
-        "#BDE0A8"
-    ]
+    comparison_rows = comparison_df.set_index("Model").to_dict("index")
 
-    comparison_rows = (
-        comparison_df
-        .set_index("Model")
-        .to_dict("index")
-    )
+    models_present = [model for model in model_names if model in comparison_rows]
+    labels = models_present
 
-    models_present = [
-        model
-        for model in model_names
-        if model in comparison_rows
-    ]
-
-    labels = [
-        short_names.get(
-            model,
-            model
-        )
-        for model in models_present
-    ]
-
-    for row_start in range(
-        0,
-        len(metric_labels),
-        2
-    ):
-
+    for row_start in range(0, len(metric_labels), 2):
         columns = st.columns(2)
 
-        for column, metric in zip(
-            columns,
-            metric_labels[
-                row_start:row_start + 2
-            ]
-        ):
-
+        for column, metric in zip(columns, metric_labels[row_start:row_start + 2]):
             with column:
+                st.markdown(f"#### {metric}")
 
-                st.markdown(
-                    f"#### {metric}"
-                )
+                scores = [comparison_rows[model][metric] for model in models_present]
 
-                scores = [
-                    comparison_rows[
-                        model
-                    ][metric]
-                    for model in models_present
-                ]
-
-                fig, ax = plt.subplots(
-                    figsize=(3.2, 3.8)
-                )
+                fig, ax = plt.subplots(figsize=(3.2, 3.8))
 
                 bars = ax.bar(
                     labels,
                     scores,
-                    color=pastel_colors[
-                        :len(models_present)
-                    ],
+                    color=pastel_colors[:len(models_present)],
                     width=0.7
                 )
 
-                ax.set_ylim(
-                    0.0,
-                    1.0
-                )
-
-                ax.set_yticks([
-                    0.0,
-                    0.2,
-                    0.4,
-                    0.6,
-                    0.8,
-                    1.0
-                ])
-
-                ax.set_title(
-                    metric,
-                    fontsize=11,
-                    fontweight="bold",
-                    pad=10
-                )
-
-                ax.set_ylabel(
-                    metric,
-                    fontsize=9
-                )
-
-                ax.tick_params(
-                    axis="x",
-                    labelsize=8
-                )
-
-                ax.tick_params(
-                    axis="y",
-                    labelsize=8
-                )
+                ax.set_ylim(0.0, 1.0)
+                ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+                ax.set_title(metric, fontsize=11, fontweight="bold", pad=10)
+                ax.set_ylabel(metric, fontsize=9)
+                ax.tick_params(axis="x", labelsize=8)
+                ax.tick_params(axis="y", labelsize=8)
 
                 for bar in bars:
-
                     height = bar.get_height()
 
                     if not pd.isna(height):
-
                         ax.annotate(
                             f"{height:.3f}",
-                            xy=(
-                                bar.get_x()
-                                + bar.get_width() / 2,
-                                height
-                            ),
+                            xy=(bar.get_x() + bar.get_width() / 2, height),
                             xytext=(0, 4),
                             textcoords="offset points",
                             ha="center",
@@ -406,23 +201,11 @@ if show_comparison:
                         )
 
                 fig.tight_layout()
+                st.pyplot(fig)
+                plt.close(fig)
 
-                st.pyplot(
-                    fig
-                )
-
-                plt.close(
-                    fig
-                )
-
-    st.markdown(
-        "---"
-    )
-
-    st.sidebar.info(
-        "Choose **Predict Grade** above to return to model selection."
-    )
-
+    st.markdown("---")
+    st.sidebar.info("Choose **Predict Grade** above to return to model selection.")
     st.stop()
 
 
@@ -436,30 +219,18 @@ model_name = st.sidebar.selectbox(
     key="prediction_model"
 )
 
-selected_model = artifacts[
-    model_name
-]["model"]
+selected_model = artifacts[model_name]["model"]
+selected_preprocessor = artifacts[model_name]["preprocessor"]
+selected_encoder = artifacts[model_name]["encoder"]
 
-selected_preprocessor = artifacts[
-    model_name
-]["preprocessor"]
-
-selected_encoder = artifacts[
-    model_name
-]["encoder"]
-
-st.sidebar.success(
-    f"Active Model: {model_name}"
-)
+st.sidebar.success(f"Active Model: {model_name}")
 
 
 # ============================================================
 # STUDENT INPUT
 # ============================================================
 
-st.header(
-    "📝 Student Performance Information"
-)
+st.header("📝 Student Performance Information")
 
 col1, col2, col3 = st.columns(3)
 
@@ -469,16 +240,7 @@ col1, col2, col3 = st.columns(3)
 # ============================================================
 
 with col1:
-
-    department = st.selectbox(
-        "Department",
-        [
-            "CS",
-            "Engineering",
-            "Business",
-            "Mathematics"
-        ]
-    )
+    department = st.selectbox("Department", ["CS", "Engineering", "Business", "Mathematics"])
 
     attendance = st.number_input(
         "Attendance (%)",
@@ -518,7 +280,6 @@ with col1:
 # ============================================================
 
 with col2:
-
     quizzes = st.number_input(
         "Quizzes Average",
         min_value=0.0,
@@ -553,10 +314,7 @@ with col2:
 
     extracurricular = st.selectbox(
         "Extracurricular Activities",
-        [
-            "Yes",
-            "No"
-        ]
+        ["Yes", "No"]
     )
 
 
@@ -565,22 +323,14 @@ with col2:
 # ============================================================
 
 with col3:
-
     internet = st.selectbox(
         "Internet Access at Home",
-        [
-            "Yes",
-            "No"
-        ]
+        ["Yes", "No"]
     )
 
     family_income = st.selectbox(
         "Family Income Level",
-        [
-            "Low",
-            "Medium",
-            "High"
-        ]
+        ["Low", "Medium", "High"]
     )
 
     stress = st.slider(
@@ -603,9 +353,7 @@ with col3:
 # PREDICTION BUTTON
 # ============================================================
 
-st.markdown(
-    "---"
-)
+st.markdown("---")
 
 predict_button = st.button(
     "🔮 Predict Grade",
@@ -620,94 +368,46 @@ predict_button = st.button(
 
 if predict_button:
 
-    # --------------------------------------------------------
-    # CREATE INPUT DATAFRAME
-    # --------------------------------------------------------
-
     input_data = pd.DataFrame([{
-
         "Department": department,
-
         "Attendance (%)": attendance,
-
         "Midterm_Score": midterm,
-
         "Final_Score": final_score,
-
         "Assignments_Avg": assignments,
-
         "Quizzes_Avg": quizzes,
-
         "Participation_Score": participation,
-
         "Projects_Score": projects,
-
         "Study_Hours_per_Week": study_hours,
-
-        "Extracurricular_Activities":
-            extracurricular,
-
-        "Internet_Access_at_Home":
-            internet,
-
-        "Family_Income_Level":
-            family_income,
-
-        "Stress_Level (1-10)":
-            stress,
-
-        "Sleep_Hours_per_Night":
-            sleep
-
+        "Extracurricular_Activities": extracurricular,
+        "Internet_Access_at_Home": internet,
+        "Family_Income_Level": family_income,
+        "Stress_Level (1-10)": stress,
+        "Sleep_Hours_per_Night": sleep
     }])
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # PREPROCESS
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
-
-        processed_input = (
-            selected_preprocessor.transform(
-                input_data
-            )
-        )
+        processed_input = selected_preprocessor.transform(input_data)
 
     except Exception as e:
-
-        st.error(
-            f"Error preprocessing input: {e}"
-        )
-
+        st.error(f"Error preprocessing input: {e}")
         st.stop()
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # PREDICTION
-    # --------------------------------------------------------
+    # ========================================================
 
     try:
-
-        prediction_encoded = (
-            selected_model.predict(
-                processed_input
-            )
-        )
-
-        predicted_grade = (
-            selected_encoder
-            .inverse_transform(
-                prediction_encoded
-            )[0]
-        )
+        prediction_encoded = selected_model.predict(processed_input)
+        predicted_grade = selected_encoder.inverse_transform(prediction_encoded)[0]
 
     except Exception as e:
-
-        st.error(
-            f"Prediction failed: {e}"
-        )
-
+        st.error(f"Prediction failed: {e}")
         st.stop()
 
 
@@ -715,106 +415,53 @@ if predict_button:
     # DISPLAY RESULT
     # ========================================================
 
-    st.markdown(
-        "---"
-    )
-
-    st.header(
-        "🎯 Prediction Result"
-    )
+    st.markdown("---")
+    st.header("🎯 Prediction Result")
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # GRADE DISPLAY
-    # --------------------------------------------------------
+    # ========================================================
 
-    if predicted_grade == "A":
-
-        st.success(
-            f"## Predicted Grade: {predicted_grade}"
-        )
-
-    elif predicted_grade == "B":
-
-        st.success(
-            f"## Predicted Grade: {predicted_grade}"
-        )
+    if predicted_grade in ["A", "B"]:
+        st.success(f"## Predicted Grade: {predicted_grade}")
 
     elif predicted_grade == "C":
-
-        st.warning(
-            f"## Predicted Grade: {predicted_grade}"
-        )
+        st.warning(f"## Predicted Grade: {predicted_grade}")
 
     else:
+        st.error(f"## Predicted Grade: {predicted_grade}")
 
-        st.error(
-            f"## Predicted Grade: {predicted_grade}"
-        )
-
-
-    st.write(
-        f"**Model Used:** {model_name}"
-    )
+    st.write(f"**Model Used:** {model_name}")
 
 
     # ========================================================
-    # PREDICTION PROBABILITY
+    # PREDICTION CONFIDENCE
     # ========================================================
 
-    if hasattr(
-        selected_model,
-        "predict_proba"
-    ):
+    if hasattr(selected_model, "predict_proba"):
 
         try:
-
-            probabilities = (
-                selected_model
-                .predict_proba(
-                    processed_input
-                )[0]
-            )
-
-            class_names = (
-                selected_encoder.classes_
-            )
+            probabilities = selected_model.predict_proba(processed_input)[0]
+            class_names = selected_encoder.classes_
 
             probability_df = pd.DataFrame({
-
                 "Grade": class_names,
-
-                "Probability": probabilities
-
+                "Probability": probabilities * 100
             })
 
-            probability_df[
-                "Probability"
-            ] = (
-                probability_df[
-                    "Probability"
-                ] * 100
-            )
-
-            st.subheader(
-                "Prediction Confidence"
-            )
+            st.subheader("Prediction Confidence")
 
             st.dataframe(
-                probability_df.style.format({
-                    "Probability": "{:.2f}%"
-                }),
+                probability_df.style.format({"Probability": "{:.2f}%"}),
                 use_container_width=True
             )
 
             st.bar_chart(
-                probability_df.set_index(
-                    "Grade"
-                )[["Probability"]]
+                probability_df.set_index("Grade")[["Probability"]]
             )
 
         except Exception:
-
             pass
 
 
@@ -822,75 +469,26 @@ if predict_button:
     # STUDENT SUMMARY
     # ========================================================
 
-    st.subheader(
-        "📋 Student Performance Summary"
-    )
+    st.subheader("📋 Student Performance Summary")
 
     summary_col1, summary_col2 = st.columns(2)
 
 
     with summary_col1:
-
-        st.write(
-            f"**Department:** {department}"
-        )
-
-        st.write(
-            f"**Attendance:** {attendance:.1f}%"
-        )
-
-        st.write(
-            f"**Midterm Score:** {midterm:.1f}"
-        )
-
-        st.write(
-            f"**Final Score:** {final_score:.1f}"
-        )
-
-        st.write(
-            f"**Assignments:** {assignments:.1f}"
-        )
-
-        st.write(
-            f"**Quizzes:** {quizzes:.1f}"
-        )
-
-        st.write(
-            f"**Participation:** {participation:.1f}"
-        )
-
-        st.write(
-            f"**Projects:** {projects:.1f}"
-        )
+        st.write(f"**Department:** {department}")
+        st.write(f"**Attendance:** {attendance:.1f}%")
+        st.write(f"**Midterm Score:** {midterm:.1f}")
+        st.write(f"**Final Score:** {final_score:.1f}")
+        st.write(f"**Assignments:** {assignments:.1f}")
+        st.write(f"**Quizzes:** {quizzes:.1f}")
+        st.write(f"**Participation:** {participation:.1f}")
+        st.write(f"**Projects:** {projects:.1f}")
 
 
     with summary_col2:
-
-        st.write(
-            f"**Study Hours:** "
-            f"{study_hours:.1f} hours/week"
-        )
-
-        st.write(
-            f"**Extracurricular:** "
-            f"{extracurricular}"
-        )
-
-        st.write(
-            f"**Internet Access:** "
-            f"{internet}"
-        )
-
-        st.write(
-            f"**Family Income:** "
-            f"{family_income}"
-        )
-
-        st.write(
-            f"**Stress Level:** {stress}/10"
-        )
-
-        st.write(
-            f"**Sleep:** "
-            f"{sleep:.1f} hours/night"
-        )
+        st.write(f"**Study Hours:** {study_hours:.1f} hours/week")
+        st.write(f"**Extracurricular:** {extracurricular}")
+        st.write(f"**Internet Access:** {internet}")
+        st.write(f"**Family Income:** {family_income}")
+        st.write(f"**Stress Level:** {stress}/10")
+        st.write(f"**Sleep:** {sleep:.1f} hours/night")
