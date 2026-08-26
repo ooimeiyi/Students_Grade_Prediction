@@ -17,12 +17,14 @@ from sklearn.metrics import (
 
 from sklearn.model_selection import train_test_split
 
+
 # ============================================================
 # SETTINGS
 # ============================================================
 
 ARTIFACTS_DIR = "artifacts"
 DATA_FILE = "Students_Performance_Dataset_Clean.csv"
+
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -33,6 +35,7 @@ st.set_page_config(
     page_icon="🎓",
     layout="wide"
 )
+
 
 # ============================================================
 # LOAD MODELS AND ARTIFACTS
@@ -112,27 +115,23 @@ artifacts = load_artifacts()
 def evaluate_saved_models():
 
     """
-    Evaluate the saved artifacts on the same
-    test split used for training.
+    Evaluate the saved models on the same
+    test split used during training.
     """
 
-    dataset = pd.read_csv(
-        DATA_FILE
+    X_test = pd.read_csv(
+        os.path.join(
+            ARTIFACTS_DIR,
+            "X_test_raw.csv"
+        )
     )
 
-    features = dataset.drop(
-        columns=["Grade"]
-    )
-
-    target = dataset["Grade"]
-
-    _, test_features, _, test_target = train_test_split(
-        features,
-        target,
-        test_size=0.20,
-        random_state=42,
-        stratify=target
-    )
+    y_test = pd.read_csv(
+        os.path.join(
+            ARTIFACTS_DIR,
+            "y_test.csv"
+        )
+    )["Grade"]
 
     results = []
 
@@ -141,7 +140,7 @@ def evaluate_saved_models():
         encoded_prediction = (
             artifact["model"].predict(
                 artifact["preprocessor"].transform(
-                    test_features
+                    X_test
                 )
             )
         )
@@ -158,26 +157,26 @@ def evaluate_saved_models():
             "Model": name,
 
             "Accuracy": accuracy_score(
-                test_target,
+                y_test,
                 prediction
             ),
 
             "F1 Score": f1_score(
-                test_target,
+                y_test,
                 prediction,
                 average="weighted",
                 zero_division=0
             ),
 
             "Precision": precision_score(
-                test_target,
+                y_test,
                 prediction,
                 average="weighted",
                 zero_division=0
             ),
 
             "Recall": recall_score(
-                test_target,
+                y_test,
                 prediction,
                 average="weighted",
                 zero_division=0
@@ -206,6 +205,7 @@ if not artifacts:
 
     st.stop()
 
+
 # ============================================================
 # SIDEBAR
 # ============================================================
@@ -227,6 +227,7 @@ show_comparison = (
     current_view == "Compare Models"
 )
 
+
 # ============================================================
 # TITLE
 # ============================================================
@@ -238,6 +239,7 @@ st.title(
 st.write(
     "Predict a student's final grade using machine learning."
 )
+
 
 # ============================================================
 # MODEL COMPARISON
@@ -423,6 +425,7 @@ if show_comparison:
 
     st.stop()
 
+
 # ============================================================
 # PREDICTION MODEL SELECTION
 # ============================================================
@@ -449,6 +452,7 @@ st.sidebar.success(
     f"Active Model: {model_name}"
 )
 
+
 # ============================================================
 # STUDENT INPUT
 # ============================================================
@@ -458,6 +462,7 @@ st.header(
 )
 
 col1, col2, col3 = st.columns(3)
+
 
 # ============================================================
 # COLUMN 1
@@ -507,6 +512,7 @@ with col1:
         step=0.1
     )
 
+
 # ============================================================
 # COLUMN 2
 # ============================================================
@@ -553,6 +559,7 @@ with col2:
         ]
     )
 
+
 # ============================================================
 # COLUMN 3
 # ============================================================
@@ -564,17 +571,6 @@ with col3:
         [
             "Yes",
             "No"
-        ]
-    )
-
-    parent_education = st.selectbox(
-        "Parent Education Level",
-        [
-            "None",
-            "High School",
-            "Bachelor's",
-            "Master's",
-            "PhD"
         ]
     )
 
@@ -602,6 +598,7 @@ with col3:
         step=0.1
     )
 
+
 # ============================================================
 # PREDICTION BUTTON
 # ============================================================
@@ -615,6 +612,7 @@ predict_button = st.button(
     type="primary",
     use_container_width=True
 )
+
 
 # ============================================================
 # PREDICTION
@@ -652,9 +650,6 @@ if predict_button:
         "Internet_Access_at_Home":
             internet,
 
-        "Parent_Education_Level":
-            parent_education,
-
         "Family_Income_Level":
             family_income,
 
@@ -665,6 +660,7 @@ if predict_button:
             sleep
 
     }])
+
 
     # --------------------------------------------------------
     # PREPROCESS
@@ -685,6 +681,7 @@ if predict_button:
         )
 
         st.stop()
+
 
     # --------------------------------------------------------
     # PREDICTION
@@ -713,6 +710,7 @@ if predict_button:
 
         st.stop()
 
+
     # ========================================================
     # DISPLAY RESULT
     # ========================================================
@@ -724,6 +722,7 @@ if predict_button:
     st.header(
         "🎯 Prediction Result"
     )
+
 
     # --------------------------------------------------------
     # GRADE DISPLAY
@@ -753,9 +752,11 @@ if predict_button:
             f"## Predicted Grade: {predicted_grade}"
         )
 
+
     st.write(
         f"**Model Used:** {model_name}"
     )
+
 
     # ========================================================
     # PREDICTION PROBABILITY
@@ -816,6 +817,7 @@ if predict_button:
 
             pass
 
+
     # ========================================================
     # STUDENT SUMMARY
     # ========================================================
@@ -825,6 +827,7 @@ if predict_button:
     )
 
     summary_col1, summary_col2 = st.columns(2)
+
 
     with summary_col1:
 
@@ -860,6 +863,7 @@ if predict_button:
             f"**Projects:** {projects:.1f}"
         )
 
+
     with summary_col2:
 
         st.write(
@@ -875,11 +879,6 @@ if predict_button:
         st.write(
             f"**Internet Access:** "
             f"{internet}"
-        )
-
-        st.write(
-            f"**Parent Education:** "
-            f"{parent_education}"
         )
 
         st.write(

@@ -4,6 +4,9 @@ import os
 import joblib
 import pandas as pd
 
+import warnings
+warnings.filterwarnings("ignore")
+
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -16,7 +19,6 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 # Settings
 ARTIFACTS_DIR = "artifacts"
 TARGET = "Grade"
-
 os.makedirs(ARTIFACTS_DIR, exist_ok=True)
 
 
@@ -34,19 +36,12 @@ if os.path.exists(feature_columns_path):
     feature_columns = joblib.load(feature_columns_path)
     X_train = X_train[feature_columns]
     X_test = X_test[feature_columns]
-else:
-    feature_columns = X_train.columns.tolist()
 
 
 # Validate data
-if TARGET in X_train.columns:
-    raise ValueError("ERROR: Grade target column is present inside X_train.")
-
-if TARGET in X_test.columns:
-    raise ValueError("ERROR: Grade target column is present inside X_test.")
-
-if list(X_train.columns) != list(X_test.columns):
-    raise ValueError("ERROR: Training and testing feature columns do not match.")
+if TARGET in X_train.columns: raise ValueError("ERROR: Grade target column is present inside X_train.")
+if TARGET in X_test.columns: raise ValueError("ERROR: Grade target column is present inside X_test.")
+if list(X_train.columns) != list(X_test.columns): raise ValueError("ERROR: Training and testing feature columns do not match.")
 
 
 # Encode target
@@ -93,10 +88,9 @@ def evaluate_model(y_true, y_pred):
 
 
 # Before fine-tuning
-baseline_model = SVC(C=1, kernel="rbf", gamma="scale")
+baseline_model = SVC(C=1, kernel="rbf", gamma="scale", probability=True, random_state=42)
 baseline_model.fit(X_train_processed, y_train_encoded)
-baseline_pred = baseline_model.predict(X_test_processed)
-before_results = evaluate_model(y_test_encoded, baseline_pred)
+before_results = evaluate_model(y_test_encoded, baseline_model.predict(X_test_processed))
 
 
 # Fine-tuning
@@ -111,7 +105,7 @@ param_grid = {
 cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
 
 random_search = RandomizedSearchCV(
-    estimator=SVC(),
+    estimator=SVC(probability=True, random_state=42),
     param_distributions=param_grid,
     n_iter=30,
     scoring="f1_weighted",
@@ -126,45 +120,36 @@ random_search.fit(X_train_processed, y_train_encoded)
 
 # After fine-tuning
 best_model = random_search.best_estimator_
-tuned_pred = best_model.predict(X_test_processed)
-after_results = evaluate_model(y_test_encoded, tuned_pred)
+after_results = evaluate_model(y_test_encoded, best_model.predict(X_test_processed))
 
 
 # Results
 print("\nSVM RESULTS")
 
 print("\nBefore Fine-Tuning")
-print(f"Accuracy : {before_results['Accuracy']:.4f}")
-print(f"F1 Score : {before_results['F1']:.4f}")
-print(f"Precision: {before_results['Precision']:.4f}")
-print(f"Recall   : {before_results['Recall']:.4f}")
+for metric, value in before_results.items():
+    print(f"{metric:<10}: {value:.4f}")
 
 print("\nAfter Fine-Tuning")
-print(f"Accuracy : {after_results['Accuracy']:.4f}")
-print(f"F1 Score : {after_results['F1']:.4f}")
-print(f"Precision: {after_results['Precision']:.4f}")
-print(f"Recall   : {after_results['Recall']:.4f}")
+for metric, value in after_results.items():
+    print(f"{metric:<10}: {value:.4f}")
 
-
-# Before vs After
 print("\nBefore vs After Fine-Tuning")
-print(f"{'Metric':<12}{'Before':>12}{'After':>12}{'Change':>12}")
-print("-" * 48)
+print(f"{'Metric':<12}{'Before':>10}{'After':>10}{'Change':>10}")
+print("-" * 42)
 
 for metric in ["Accuracy", "F1", "Precision", "Recall"]:
     before = before_results[metric]
     after = after_results[metric]
-    change = after - before
-    print(f"{metric:<12}{before:>12.4f}{after:>12.4f}{change:>12.4f}")
+    print(f"{metric:<12}{before:>10.4f}{after:>10.4f}{after - before:>10.4f}")
 
 
 # Final result
-print("\nFinal Result")
-print("Best Parameters:", random_search.best_params_)
-print(f"Accuracy : {after_results['Accuracy']:.4f}")
-print(f"F1 Score : {after_results['F1']:.4f}")
-print(f"Precision: {after_results['Precision']:.4f}")
-print(f"Recall   : {after_results['Recall']:.4f}")
+print("\nBest Parameters:", random_search.best_params_)
+print(f"Final Accuracy : {after_results['Accuracy']:.4f}")
+print(f"Final F1 Score : {after_results['F1']:.4f}")
+print(f"Final Precision: {after_results['Precision']:.4f}")
+print(f"Final Recall   : {after_results['Recall']:.4f}")
 
 
 # Save artifacts
