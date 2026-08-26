@@ -64,8 +64,6 @@ print(df.shape)
 # ============================================
 # 3. REMOVE PERSONAL / UNNECESSARY INFORMATION
 # ============================================
-# reduce overfitting risk
-# prevent data leakage 
 
 personal_columns = [
     "Student_ID",
