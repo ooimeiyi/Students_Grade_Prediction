@@ -38,6 +38,7 @@ TARGET = "Grade"
 TEST_SIZE = 0.20
 RANDOM_STATE = 42
 
+# Load the dataset into a pandas DataFrame
 df = pd.read_csv(INPUT_FILE)
 
 print("============================================")
@@ -63,6 +64,8 @@ print(df.shape)
 # ============================================
 # 3. REMOVE PERSONAL / UNNECESSARY INFORMATION
 # ============================================
+# reduce overfitting risk
+# prevent data leakage 
 
 personal_columns = [
     "Student_ID",
@@ -119,7 +122,7 @@ print(
 # ============================================
 
 # Parent Education Level is categorical,
-# so fill missing values with its mode.
+# so fill missing values with mode.
 
 if "Parent_Education_Level" in df.columns:
 
