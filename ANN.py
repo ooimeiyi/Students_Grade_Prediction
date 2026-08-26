@@ -362,33 +362,23 @@ print("\n============================================")
 print("BASELINE ANN")
 print("============================================")
 
+# two hidden layers: 64 neurons in 1st and  32 neurons in 2nd layer
 
 baseline_model = MLPClassifier(
-
-    hidden_layer_sizes=(64, 32),
-
-    activation="relu",
-
-    solver="adam",
-
+    hidden_layer_sizes=(64, 32), 
+    activation="relu", #activation function for the hidden layers
+    solver="adam", # updates weights based on training data
     alpha=0.0001,
-
     batch_size=32,
-
     learning_rate_init=0.001,
-
-    max_iter=500,
-
-    early_stopping=True,
-
+    max_iter=500, # allows model up to iterate through the training data multiple times
+    early_stopping=True, # stops training if validation score does not improve
     validation_fraction=0.1,
-
     n_iter_no_change=20,
-
     random_state=42
 )
 
-
+# train and predict using the baseline model
 baseline_model.fit(
     X_train_processed,
     y_train_encoded
@@ -511,21 +501,13 @@ cv = StratifiedKFold(
 
 
 random_search = RandomizedSearchCV(
-
     estimator=tuning_model,
-
     param_distributions=param_grid,
-
     n_iter=30,
-
     scoring="f1_weighted",
-
     cv=cv,
-
     verbose=0,
-
     random_state=42,
-
     n_jobs=-1
 )
 

@@ -15,6 +15,7 @@ TARGET = "Grade"
 TEST_SIZE = 0.20
 RANDOM_STATE = 42
 
+# Load the dataset into a pandas DataFrame
 df = pd.read_csv(INPUT_FILE)
 
 print("STUDENT PERFORMANCE DATASET PREPROCESSING")
