@@ -249,11 +249,6 @@ if show_comparison:
         "📊 Model Comparison"
     )
 
-    st.info(
-        "Metrics are calculated from the saved models using the same "
-        "20% stratified test split (random_state=42) as the training scripts."
-    )
-
     comparison_df = evaluate_saved_models()
 
     st.dataframe(
@@ -314,15 +309,15 @@ if show_comparison:
     for row_start in range(
         0,
         len(metric_labels),
-        3
+        2
     ):
 
-        columns = st.columns(3)
+        columns = st.columns(2)
 
         for column, metric in zip(
             columns,
             metric_labels[
-                row_start:row_start + 3
+                row_start:row_start + 2
             ]
         ):
 
@@ -861,11 +856,11 @@ if predict_button:
             f"**Participation:** {participation:.1f}"
         )
 
-    with summary_col2:
-
         st.write(
             f"**Projects:** {projects:.1f}"
         )
+
+    with summary_col2:
 
         st.write(
             f"**Study Hours:** "
