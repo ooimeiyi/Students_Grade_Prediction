@@ -57,7 +57,6 @@ print("\nRemoved columns:", remove_columns if remove_columns else "None")
 print("\nMissing values before cleaning:")
 print(df.isnull().sum())
 
-
 # Remove Total_Score
 if "Total_Score" in df.columns:
     df = df.drop(columns=["Total_Score"])
