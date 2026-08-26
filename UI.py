@@ -85,10 +85,14 @@ def load_artifacts():
         ):
 
             artifacts[model_name] = {
-                "model": joblib.load(model_path),
+                "model": joblib.load(
+                    model_path
+                ),
+
                 "preprocessor": joblib.load(
                     preprocessor_path
                 ),
+
                 "encoder": joblib.load(
                     encoder_path
                 )
@@ -100,10 +104,17 @@ def load_artifacts():
 artifacts = load_artifacts()
 
 
+# ============================================================
+# EVALUATE SAVED MODELS
+# ============================================================
+
 @st.cache_data
 def evaluate_saved_models():
 
-    """Evaluate the saved artifacts on the same test split used for training."""
+    """
+    Evaluate the saved artifacts on the same
+    test split used for training.
+    """
 
     dataset = pd.read_csv(
         DATA_FILE
@@ -127,21 +138,23 @@ def evaluate_saved_models():
 
     for name, artifact in artifacts.items():
 
-        encoded_prediction = artifact[
-            "model"
-        ].predict(
-            artifact["preprocessor"].transform(
-                test_features
+        encoded_prediction = (
+            artifact["model"].predict(
+                artifact["preprocessor"].transform(
+                    test_features
+                )
             )
         )
 
-        prediction = artifact[
-            "encoder"
-        ].inverse_transform(
-            encoded_prediction
+        prediction = (
+            artifact["encoder"]
+            .inverse_transform(
+                encoded_prediction
+            )
         )
 
         results.append({
+
             "Model": name,
 
             "Accuracy": accuracy_score(
@@ -169,9 +182,12 @@ def evaluate_saved_models():
                 average="weighted",
                 zero_division=0
             )
+
         })
 
-    return pd.DataFrame(results)
+    return pd.DataFrame(
+        results
+    )
 
 
 # ============================================================
@@ -394,11 +410,17 @@ if show_comparison:
 
                 fig.tight_layout()
 
-                st.pyplot(fig)
+                st.pyplot(
+                    fig
+                )
 
-                plt.close(fig)
+                plt.close(
+                    fig
+                )
 
-    st.markdown("---")
+    st.markdown(
+        "---"
+    )
 
     st.sidebar.info(
         "Choose **Predict Grade** above to return to model selection."
@@ -437,7 +459,7 @@ st.sidebar.success(
 # ============================================================
 
 st.header(
-    "📝 Student Information"
+    "📝 Student Performance Information"
 )
 
 col1, col2, col3 = st.columns(3)
@@ -447,22 +469,6 @@ col1, col2, col3 = st.columns(3)
 # ============================================================
 
 with col1:
-
-    gender = st.selectbox(
-        "Gender",
-        [
-            "Female",
-            "Male"
-        ]
-    )
-
-    age = st.number_input(
-        "Age",
-        min_value=15,
-        max_value=100,
-        value=20,
-        step=1
-    )
 
     department = st.selectbox(
         "Department",
@@ -490,12 +496,6 @@ with col1:
         step=0.1
     )
 
-# ============================================================
-# COLUMN 2
-# ============================================================
-
-with col2:
-
     final_score = st.number_input(
         "Final Score",
         min_value=0.0,
@@ -511,6 +511,12 @@ with col2:
         value=70.0,
         step=0.1
     )
+
+# ============================================================
+# COLUMN 2
+# ============================================================
+
+with col2:
 
     quizzes = st.number_input(
         "Quizzes Average",
@@ -536,12 +542,6 @@ with col2:
         step=0.1
     )
 
-# ============================================================
-# COLUMN 3
-# ============================================================
-
-with col3:
-
     study_hours = st.number_input(
         "Study Hours per Week",
         min_value=0.0,
@@ -557,6 +557,12 @@ with col3:
             "No"
         ]
     )
+
+# ============================================================
+# COLUMN 3
+# ============================================================
+
+with col3:
 
     internet = st.selectbox(
         "Internet Access at Home",
@@ -605,7 +611,9 @@ with col3:
 # PREDICTION BUTTON
 # ============================================================
 
-st.markdown("---")
+st.markdown(
+    "---"
+)
 
 predict_button = st.button(
     "🔮 Predict Grade",
@@ -624,10 +632,6 @@ if predict_button:
     # --------------------------------------------------------
 
     input_data = pd.DataFrame([{
-
-        "Gender": gender,
-
-        "Age": age,
 
         "Department": department,
 
@@ -718,7 +722,9 @@ if predict_button:
     # DISPLAY RESULT
     # ========================================================
 
-    st.markdown("---")
+    st.markdown(
+        "---"
+    )
 
     st.header(
         "🎯 Prediction Result"
@@ -779,8 +785,11 @@ if predict_button:
             )
 
             probability_df = pd.DataFrame({
+
                 "Grade": class_names,
+
                 "Probability": probabilities
+
             })
 
             probability_df[
@@ -809,6 +818,7 @@ if predict_button:
             )
 
         except Exception:
+
             pass
 
     # ========================================================
@@ -822,6 +832,10 @@ if predict_button:
     summary_col1, summary_col2 = st.columns(2)
 
     with summary_col1:
+
+        st.write(
+            f"**Department:** {department}"
+        )
 
         st.write(
             f"**Attendance:** {attendance:.1f}%"
@@ -843,14 +857,14 @@ if predict_button:
             f"**Quizzes:** {quizzes:.1f}"
         )
 
+        st.write(
+            f"**Participation:** {participation:.1f}"
+        )
+
     with summary_col2:
 
         st.write(
             f"**Projects:** {projects:.1f}"
-        )
-
-        st.write(
-            f"**Participation:** {participation:.1f}"
         )
 
         st.write(
@@ -859,9 +873,30 @@ if predict_button:
         )
 
         st.write(
+            f"**Extracurricular:** "
+            f"{extracurricular}"
+        )
+
+        st.write(
+            f"**Internet Access:** "
+            f"{internet}"
+        )
+
+        st.write(
+            f"**Parent Education:** "
+            f"{parent_education}"
+        )
+
+        st.write(
+            f"**Family Income:** "
+            f"{family_income}"
+        )
+
+        st.write(
             f"**Stress Level:** {stress}/10"
         )
 
         st.write(
-            f"**Sleep:** {sleep:.1f} hours/night"
+            f"**Sleep:** "
+            f"{sleep:.1f} hours/night"
         )

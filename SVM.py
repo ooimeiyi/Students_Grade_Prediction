@@ -81,29 +81,6 @@ y_test = pd.read_csv(
 
 
 # ============================================================
-# OUTPUT
-# ============================================================
-
-print("============================================")
-print("SVM STUDENT GRADE PREDICTION")
-print("============================================")
-
-print("\nLoaded preprocessing artifacts:")
-
-print(" - artifacts/X_train_raw.csv")
-print(" - artifacts/X_test_raw.csv")
-print(" - artifacts/y_train.csv")
-print(" - artifacts/y_test.csv")
-
-
-print("\nTraining samples:")
-print(len(X_train))
-
-print("Testing samples :")
-print(len(X_test))
-
-
-# ============================================================
 # 2. LOAD FEATURE COLUMNS
 # ============================================================
 
@@ -112,29 +89,26 @@ feature_columns_path = os.path.join(
     "feature_columns.joblib"
 )
 
-if os.path.exists(feature_columns_path):
+if os.path.exists(
+    feature_columns_path
+):
 
     feature_columns = joblib.load(
         feature_columns_path
     )
 
-    print("\nFeature columns loaded from:")
-    print(" - artifacts/feature_columns.joblib")
+    X_train = X_train[
+        feature_columns
+    ]
 
-    # Ensure the same feature order as preprocessing
-    X_train = X_train[feature_columns]
-    X_test = X_test[feature_columns]
+    X_test = X_test[
+        feature_columns
+    ]
 
 else:
 
-    feature_columns = X_train.columns.tolist()
-
-    print(
-        "\nWARNING: feature_columns.joblib not found."
-    )
-
-    print(
-        "Using columns from X_train_raw.csv."
+    feature_columns = (
+        X_train.columns.tolist()
     )
 
 
@@ -170,10 +144,6 @@ if list(X_train.columns) != list(X_test.columns):
     )
 
 
-print("\nFeature count:")
-print(len(X_train.columns))
-
-
 # ============================================================
 # 5. ENCODE TARGET
 # ============================================================
@@ -187,10 +157,6 @@ y_train_encoded = label_encoder.fit_transform(
 y_test_encoded = label_encoder.transform(
     y_test
 )
-
-
-print("\nGrade classes:")
-print(label_encoder.classes_)
 
 
 # ============================================================
@@ -213,18 +179,6 @@ categorical_features = X_train.select_dtypes(
         "string"
     ]
 ).columns.tolist()
-
-
-print("\nNumeric features:")
-
-for column in numeric_features:
-    print(" -", column)
-
-
-print("\nCategorical features:")
-
-for column in categorical_features:
-    print(" -", column)
 
 
 # ============================================================
@@ -289,11 +243,6 @@ preprocessor = ColumnTransformer(
 # 8. PREPROCESS TRAIN / TEST
 # ============================================================
 
-print("\n============================================")
-print("MODEL-SPECIFIC PREPROCESSING")
-print("============================================")
-
-
 X_train_processed = preprocessor.fit_transform(
     X_train
 )
@@ -301,17 +250,6 @@ X_train_processed = preprocessor.fit_transform(
 
 X_test_processed = preprocessor.transform(
     X_test
-)
-
-
-print(
-    "\nProcessed training shape:",
-    X_train_processed.shape
-)
-
-print(
-    "Processed testing shape :",
-    X_test_processed.shape
 )
 
 
@@ -358,11 +296,6 @@ def evaluate_model(
 # 10. BEFORE FINE-TUNING
 # ============================================================
 
-print("\n============================================")
-print("BASELINE SVM")
-print("============================================")
-
-
 baseline_model = SVC(
 
     C=1,
@@ -395,43 +328,9 @@ before_results = evaluate_model(
 )
 
 
-print("\n============================================")
-print("BEFORE FINE-TUNING")
-print("============================================")
-
-
-print(
-    f"Accuracy : "
-    f"{before_results['Accuracy']:.4f}"
-)
-
-
-print(
-    f"F1 Score : "
-    f"{before_results['F1']:.4f}"
-)
-
-
-print(
-    f"Precision: "
-    f"{before_results['Precision']:.4f}"
-)
-
-
-print(
-    f"Recall   : "
-    f"{before_results['Recall']:.4f}"
-)
-
-
 # ============================================================
 # 11. FINE-TUNING
 # ============================================================
-
-print("\n============================================")
-print("FINE-TUNING SVM")
-print("============================================")
-
 
 param_grid = {
 
@@ -519,30 +418,12 @@ random_search.fit(
 # 12. BEST MODEL
 # ============================================================
 
-print("\n============================================")
-print("BEST SVM MODEL")
-print("============================================")
-
-
-print("\nBest Parameters:")
-
-print(
-    random_search.best_params_
-)
-
-
-print(
-    f"\nBest CV F1 Score: "
-    f"{random_search.best_score_:.4f}"
-)
+best_model = random_search.best_estimator_
 
 
 # ============================================================
 # 13. AFTER FINE-TUNING
 # ============================================================
-
-best_model = random_search.best_estimator_
-
 
 tuned_pred = best_model.predict(
 
@@ -558,42 +439,36 @@ after_results = evaluate_model(
 )
 
 
+# ============================================================
+# 14. RESULTS
+# ============================================================
+
 print("\n============================================")
-print("AFTER FINE-TUNING")
+print("SVM RESULTS")
 print("============================================")
 
 
 print(
-    f"Accuracy : "
-    f"{after_results['Accuracy']:.4f}"
+    f"Accuracy : {after_results['Accuracy']:.4f}"
 )
 
 
 print(
-    f"F1 Score : "
-    f"{after_results['F1']:.4f}"
+    f"F1 Score : {after_results['F1']:.4f}"
 )
 
 
 print(
-    f"Precision: "
-    f"{after_results['Precision']:.4f}"
+    f"Precision: {after_results['Precision']:.4f}"
 )
 
 
 print(
-    f"Recall   : "
-    f"{after_results['Recall']:.4f}"
+    f"Recall   : {after_results['Recall']:.4f}"
 )
 
 
-# ============================================================
-# 14. BEFORE VS AFTER
-# ============================================================
-
-print("\n============================================")
-print("BEFORE vs AFTER FINE-TUNING")
-print("============================================")
+print("\nBefore vs After Fine-Tuning")
 
 
 print(
@@ -704,75 +579,7 @@ joblib.dump(
 
 
 # ============================================================
-# 17. FINAL OUTPUT
+# 17. COMPLETE
 # ============================================================
 
-print("\n============================================")
-print("SVM ARTIFACTS SAVED")
-print("============================================")
-
-
-print(
-    "artifacts/svm_grade_model.pkl"
-)
-
-
-print(
-    "artifacts/svm_preprocessor.pkl"
-)
-
-
-print(
-    "artifacts/svm_label_encoder.pkl"
-)
-
-
-print(
-    "artifacts/svm_feature_columns.joblib"
-)
-
-
-print("\n============================================")
-print("DATA SOURCE CHECK")
-print("============================================")
-
-
-print(
-    "Training data:"
-)
-
-print(
-    " - artifacts/X_train_raw.csv"
-)
-
-
-print(
-    "Testing data:"
-)
-
-print(
-    " - artifacts/X_test_raw.csv"
-)
-
-
-print(
-    "Training target:"
-)
-
-print(
-    " - artifacts/y_train.csv"
-)
-
-
-print(
-    "Testing target:"
-)
-
-print(
-    " - artifacts/y_test.csv"
-)
-
-
-print("\n============================================")
-print("SVM TRAINING COMPLETE")
-print("============================================")
+print("\nSVM training complete.")

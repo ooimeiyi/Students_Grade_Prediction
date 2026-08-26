@@ -13,6 +13,8 @@
 # Grade
 
 # IMPORTANT:
+# Gender -> REMOVED
+# Age -> REMOVED
 # Final_Score -> KEPT
 # Total_Score -> REMOVED
 
@@ -59,7 +61,7 @@ print("Shape after removing duplicates:")
 print(df.shape)
 
 # ============================================
-# 3. REMOVE PERSONAL INFORMATION
+# 3. REMOVE PERSONAL / UNNECESSARY INFORMATION
 # ============================================
 
 personal_columns = [
@@ -68,12 +70,16 @@ personal_columns = [
     "ID",
     "First_Name",
     "Last_Name",
-    "Email"
+    "Email",
+    "Gender",
+    "Age"
 ]
 
 # Only remove columns that exist
+
 personal_columns = [
-    column for column in personal_columns
+    column
+    for column in personal_columns
     if column in df.columns
 ]
 
@@ -81,12 +87,19 @@ df = df.drop(
     columns=personal_columns
 )
 
-print("\nRemoved personal columns:")
+print("\nRemoved personal/unnecessary columns:")
 
 if personal_columns:
+
     for column in personal_columns:
-        print(" -", column)
+
+        print(
+            " -",
+            column
+        )
+
 else:
+
     print(" - None")
 
 # ============================================
@@ -97,7 +110,9 @@ print("\n============================================")
 print("MISSING VALUES BEFORE CLEANING")
 print("============================================")
 
-print(df.isnull().sum())
+print(
+    df.isnull().sum()
+)
 
 # ============================================
 # 5. HANDLE MISSING VALUES
@@ -131,7 +146,8 @@ if "Parent_Education_Level" in df.columns:
         )
 
         print(
-            "Filled with mode:", mode_value
+            "Filled with mode:",
+            mode_value
         )
 
 # ============================================
@@ -151,7 +167,8 @@ if "Parent_Education_Level" in df.columns:
 # We DO NOT use Total_Score as an input
 # feature when predicting Grade.
 #
-# Final_Score is KEPT.
+# Final_Score is KEPT because it is an
+# input feature for Grade prediction.
 #
 # ============================================
 
@@ -186,20 +203,24 @@ if TARGET not in df.columns:
 # ============================================
 
 #
-# These are raw feature values after dataset cleaning,
-# but before model-specific preprocessing such as scaling
-# or one-hot encoding.
+# These are raw feature values after dataset
+# cleaning, but before model-specific
+# preprocessing such as scaling or encoding.
 #
 # Every training script can use this same split
 # for fair comparison.
 #
+# ============================================
 
 os.makedirs(
     ARTIFACTS_DIR,
     exist_ok=True
 )
 
-X = df.drop(columns=[TARGET])
+X = df.drop(
+    columns=[TARGET]
+)
+
 y = df[TARGET]
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -210,6 +231,10 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
+# ============================================
+# 9. SAVE TRAINING FEATURES
+# ============================================
+
 X_train.to_csv(
     os.path.join(
         ARTIFACTS_DIR,
@@ -217,6 +242,10 @@ X_train.to_csv(
     ),
     index=False
 )
+
+# ============================================
+# 10. SAVE TESTING FEATURES
+# ============================================
 
 X_test.to_csv(
     os.path.join(
@@ -226,7 +255,13 @@ X_test.to_csv(
     index=False
 )
 
-y_train.to_frame(name=TARGET).to_csv(
+# ============================================
+# 11. SAVE TRAINING TARGET
+# ============================================
+
+y_train.to_frame(
+    name=TARGET
+).to_csv(
     os.path.join(
         ARTIFACTS_DIR,
         "y_train.csv"
@@ -234,13 +269,23 @@ y_train.to_frame(name=TARGET).to_csv(
     index=False
 )
 
-y_test.to_frame(name=TARGET).to_csv(
+# ============================================
+# 12. SAVE TESTING TARGET
+# ============================================
+
+y_test.to_frame(
+    name=TARGET
+).to_csv(
     os.path.join(
         ARTIFACTS_DIR,
         "y_test.csv"
     ),
     index=False
 )
+
+# ============================================
+# 13. SAVE SPLIT METADATA
+# ============================================
 
 split_metadata = {
     "source_file": OUTPUT_FILE,
@@ -269,7 +314,10 @@ with open(
         indent=2
     )
 
-# Saves the exact raw fields and ordering required before transformation.
+# ============================================
+# 14. SAVE FEATURE COLUMNS
+# ============================================
+
 joblib.dump(
     X.columns.tolist(),
     os.path.join(
@@ -278,35 +326,63 @@ joblib.dump(
     )
 )
 
-print("\nSaved reproducible train/test artifacts:")
+print(
+    "\nSaved reproducible train/test artifacts:"
+)
 
-print(" - artifacts/X_train_raw.csv")
-print(" - artifacts/X_test_raw.csv")
-print(" - artifacts/y_train.csv")
-print(" - artifacts/y_test.csv")
-print(" - artifacts/split_metadata.json")
-print(" - artifacts/feature_columns.joblib")
+print(
+    " - artifacts/X_train_raw.csv"
+)
+
+print(
+    " - artifacts/X_test_raw.csv"
+)
+
+print(
+    " - artifacts/y_train.csv"
+)
+
+print(
+    " - artifacts/y_test.csv"
+)
+
+print(
+    " - artifacts/split_metadata.json"
+)
+
+print(
+    " - artifacts/feature_columns.joblib"
+)
 
 # ============================================
-# 9. FINAL COLUMN CHECK
+# 15. FINAL COLUMN CHECK
 # ============================================
 
 print("\n============================================")
 print("FINAL FEATURES")
 print("============================================")
 
-print("\nFeatures available for Grade prediction:")
+print(
+    "\nFeatures available for Grade prediction:"
+)
 
 for column in df.columns:
 
     if column != TARGET:
-        print(" -", column)
+
+        print(
+            " -",
+            column
+        )
 
 print("\nTarget:")
-print(" - Grade")
+
+print(
+    " - Grade"
+)
 
 # ============================================
-# 10. SAVE CLEAN DATASET
+# 16. SAVE CLEAN DATASET
 # ============================================
 
 df.to_csv(
@@ -315,17 +391,19 @@ df.to_csv(
 )
 
 # ============================================
-# 11. CHECK MISSING VALUES AFTER CLEANING
+# 17. CHECK MISSING VALUES AFTER CLEANING
 # ============================================
 
 print("\n============================================")
 print("MISSING VALUES AFTER CLEANING")
 print("============================================")
 
-print(df.isnull().sum())
+print(
+    df.isnull().sum()
+)
 
 # ============================================
-# 12. GRADE DISTRIBUTION
+# 18. GRADE DISTRIBUTION
 # ============================================
 
 print("\n============================================")
@@ -339,7 +417,7 @@ print(
 )
 
 # ============================================
-# 13. FINAL DATASET INFORMATION
+# 19. FINAL DATASET INFORMATION
 # ============================================
 
 print("\n============================================")
@@ -359,10 +437,14 @@ print(
 print("\nFinal columns:")
 
 for column in df.columns:
-    print(" -", column)
+
+    print(
+        " -",
+        column
+    )
 
 # ============================================
-# 14. FINAL CHECK
+# 20. FINAL CHECK
 # ============================================
 
 print("\n============================================")
@@ -378,13 +460,13 @@ if "Total_Score" in df.columns:
 else:
 
     print(
-        "Total_Score: REMOVED "
+        "Total_Score: REMOVED"
     )
 
 if "Final_Score" in df.columns:
 
     print(
-        "Final_Score: INCLUDED "
+        "Final_Score: INCLUDED"
     )
 
 else:
@@ -393,8 +475,32 @@ else:
         "WARNING: Final_Score is missing!"
     )
 
+if "Gender" in df.columns:
+
+    print(
+        "WARNING: Gender is still present!"
+    )
+
+else:
+
+    print(
+        "Gender: REMOVED"
+    )
+
+if "Age" in df.columns:
+
+    print(
+        "WARNING: Age is still present!"
+    )
+
+else:
+
+    print(
+        "Age: REMOVED"
+    )
+
 print(
-    "Grade: TARGET "
+    "Grade: TARGET"
 )
 
 print("============================================")
