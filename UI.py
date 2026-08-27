@@ -5,6 +5,7 @@
 import os
 import joblib
 import pandas as pd
+import altair as alt
 import streamlit as st
 
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
@@ -15,6 +16,25 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ARTIFACTS_DIR = os.path.join(BASE_DIR, "artifacts")
+
+# Visual identity for each grade, reused by the result card and the chart.
+GRADE_STYLE = {
+    "A": {"color": "#1DB954", "label": "Excellent"},
+    "B": {"color": "#2E9BF0", "label": "Good"},
+    "C": {"color": "#F5A623", "label": "Average"},
+    "D": {"color": "#E8622C", "label": "At risk"},
+    "F": {"color": "#E03C31", "label": "Failing"},
+}
+DEFAULT_STYLE = {"color": "#6B7280", "label": ""}
+
+# Fixed color and display order per model, reused by the comparison charts.
+MODEL_ORDER = ["ANN", "SVM", "XGBoost"]
+MODEL_COLORS = {
+    "ANN": "#A8E6B0",
+    "SVM": "#FDF1A0",
+    "XGBoost": "#A9D6F5",
+}
+DEFAULT_MODEL_COLOR = "#D1D5DB"
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -175,10 +195,10 @@ if current_view == "Compare Models":
 
     # BEST MODEL CARD
     best_model_row = comparison_df.loc[comparison_df["F1 Score"].idxmax()]
-    
+
     st.metric(
-        label="🏆 Top Performing Model (Highest F1)", 
-        value=best_model_row['Model'], 
+        label="🏆 Top Performing Model (Highest F1)",
+        value=best_model_row['Model'],
         delta=f"F1: {best_model_row['F1 Score']:.4f}"
     )
 
@@ -194,21 +214,50 @@ if current_view == "Compare Models":
         use_container_width=True
     )
 
-    # NATIVE INTERACTIVE CHARTS
-    st.subheader("📈 Interactive Metric Comparison")
-    
-    metric_tabs = st.tabs(["F1 Score", "Accuracy", "Precision", "Recall"])
-    
-    chart_data = comparison_df.set_index("Model")
-    
+    # METRIC COMPARISON CHARTS
+    # Built with plain Altair (no .interactive() call) instead of
+    # st.bar_chart, since st.bar_chart enables scroll-to-zoom / drag-to-pan
+    # by default and Streamlit doesn't expose a flag to turn that off.
+    # A chart only gets pan/zoom in Altair/Vega-Lite once you opt in with
+    # .interactive() or an explicit zoom/pan param binding - leaving both
+    # out keeps the chart static while still showing hover tooltips.
+    st.subheader("📈 Metric Comparison")
+
+    metric_tabs = st.tabs(["Accuracy", "F1 Score", "Precision", "Recall"])
+
+    models_present = comparison_df["Model"].tolist()
+    ordered_models = [m for m in MODEL_ORDER if m in models_present] + [
+        m for m in models_present if m not in MODEL_ORDER
+    ]
+    color_domain = ordered_models
+    color_range = [MODEL_COLORS.get(m, DEFAULT_MODEL_COLOR) for m in ordered_models]
+
+    def render_metric_chart(metric_column):
+        chart = (
+            alt.Chart(comparison_df)
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            .encode(
+                x=alt.X("Model:N", title=None, sort=ordered_models),
+                y=alt.Y(f"{metric_column}:Q", title=metric_column, scale=alt.Scale(domain=[0, 1])),
+                color=alt.Color(
+                    "Model:N",
+                    scale=alt.Scale(domain=color_domain, range=color_range),
+                    legend=None,
+                ),
+                tooltip=["Model", alt.Tooltip(f"{metric_column}:Q", format=".4f")],
+            )
+            .properties(height=320)
+        )
+        st.altair_chart(chart, use_container_width=True)
+
     with metric_tabs[0]:
-        st.bar_chart(chart_data["F1 Score"])
+        render_metric_chart("Accuracy")
     with metric_tabs[1]:
-        st.bar_chart(chart_data["Accuracy"])
+        render_metric_chart("F1 Score")
     with metric_tabs[2]:
-        st.bar_chart(chart_data["Precision"])
+        render_metric_chart("Precision")
     with metric_tabs[3]:
-        st.bar_chart(chart_data["Recall"])
+        render_metric_chart("Recall")
 
     st.stop()
 
@@ -309,18 +358,10 @@ if predict_button:
         st.exception(e)
         st.stop()
 
-    # RESULT CARD
-    st.markdown("---")
-    st.header("🎯 Prediction Result")
+    # Build a probability table up front (used by both the card and the chart)
+    probability_df = None
+    top_confidence = None
 
-    res_col1, res_col2 = st.columns([1, 2])
-
-    with res_col1:
-        with st.container(border=True):
-            st.metric(label="Predicted Grade", value=predicted_grade)
-            st.caption(f"Engineered by: {model_name}")
-
-    # CONFIDENCE
     if hasattr(selected_model, "predict_proba"):
         try:
             probabilities = selected_model.predict_proba(processed_input)[0]
@@ -328,35 +369,122 @@ if predict_button:
 
             probability_df = pd.DataFrame({
                 "Grade": class_names,
-                "Probability (%)": probabilities * 100
-            }).set_index("Grade")
+                "Probability": probabilities
+            }).sort_values("Probability", ascending=False).reset_index(drop=True)
 
-            with res_col2:
-                st.subheader("📊 Class Confidence Breakdown")
-                st.bar_chart(probability_df["Probability (%)"])
-
+            top_confidence = probability_df.loc[
+                probability_df["Grade"] == predicted_grade, "Probability"
+            ].iloc[0]
         except Exception as e:
             st.warning(f"Confidence display unavailable: {e}")
 
+    # ========================================================
+    # RESULT CARD
+    # ========================================================
+    st.markdown("---")
+    st.header("🎯 Prediction Result")
+
+    style = GRADE_STYLE.get(str(predicted_grade).upper(), DEFAULT_STYLE)
+    confidence_text = f"{top_confidence * 100:.1f}% confidence" if top_confidence is not None else ""
+
+    res_col1, res_col2 = st.columns([1, 2], gap="large")
+
+    with res_col1:
+        st.markdown(
+            f"""
+            <div style="
+                border: 1px solid #E5E7EB;
+                border-radius: 12px;
+                padding: 28px 24px;
+                text-align: center;
+                background: linear-gradient(180deg, {style['color']}14 0%, #FFFFFF 65%);
+            ">
+                <div style="font-size: 14px; color: #6B7280; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">
+                    Predicted Grade
+                </div>
+                <div style="
+                    font-size: 72px;
+                    font-weight: 800;
+                    line-height: 1.1;
+                    color: {style['color']};
+                    margin: 8px 0 4px 0;
+                ">
+                    {predicted_grade}
+                </div>
+                <div style="font-size: 15px; color: {style['color']}; font-weight: 600;">
+                    {style['label']}
+                </div>
+                <div style="font-size: 13px; color: #6B7280; margin-top: 10px;">
+                    {confidence_text}
+                </div>
+                <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 16px 0;">
+                <div style="font-size: 12px; color: #9CA3AF;">
+                    Engineered by {model_name}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with res_col2:
+        st.subheader("📊 Class Confidence Breakdown")
+
+        if probability_df is not None:
+            chart_df = probability_df.copy()
+            chart_df["Probability (%)"] = chart_df["Probability"] * 100
+            chart_df["Predicted"] = chart_df["Grade"] == predicted_grade
+
+            grade_order = [g for g in GRADE_STYLE if g in chart_df["Grade"].values] or None
+
+            confidence_chart = (
+                alt.Chart(chart_df)
+                .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+                .encode(
+                    x=alt.X("Grade:N", sort=grade_order, title=None),
+                    y=alt.Y("Probability (%):Q", title="Probability (%)", scale=alt.Scale(domain=[0, 100])),
+                    color=alt.condition(
+                        alt.datum.Predicted,
+                        alt.value(style["color"]),
+                        alt.value("#D1D5DB"),
+                    ),
+                    tooltip=["Grade", alt.Tooltip("Probability (%):Q", format=".1f")],
+                )
+            )
+
+            labels = (
+                alt.Chart(chart_df)
+                .mark_text(dy=-8, fontWeight="bold")
+                .encode(
+                    x=alt.X("Grade:N", sort=grade_order),
+                    y="Probability (%):Q",
+                    text=alt.Text("Probability (%):Q", format=".1f"),
+                )
+            )
+
+            st.altair_chart((confidence_chart + labels).properties(height=320), use_container_width=True)
+        else:
+            st.info("This model does not expose class probabilities.")
+
+    # ========================================================
     # STUDENT SUMMARY
-    st.subheader("📋 Student Performance Summary")
-    
-    summary_col1, summary_col2 = st.columns(2)
+    # ========================================================
+    with st.expander("📋 Student Performance Summary", expanded=False):
+        summary_col1, summary_col2 = st.columns(2)
 
-    with summary_col1:
-        st.write(f"**Department:** {department}")
-        st.write(f"**Attendance:** {attendance:.1f}%")
-        st.write(f"**Midterm Score:** {midterm:.1f}")
-        st.write(f"**Final Score:** {final_score:.1f}")
-        st.write(f"**Assignments:** {assignments:.1f}")
-        st.write(f"**Quizzes:** {quizzes:.1f}")
-        st.write(f"**Participation:** {participation:.1f}")
-        st.write(f"**Projects:** {projects:.1f}")
+        with summary_col1:
+            st.write(f"**Department:** {department}")
+            st.write(f"**Attendance:** {attendance:.1f}%")
+            st.write(f"**Midterm Score:** {midterm:.1f}")
+            st.write(f"**Final Score:** {final_score:.1f}")
+            st.write(f"**Assignments:** {assignments:.1f}")
+            st.write(f"**Quizzes:** {quizzes:.1f}")
+            st.write(f"**Participation:** {participation:.1f}")
 
-    with summary_col2:
-        st.write(f"**Study Hours:** {study_hours:.1f} hours/week")
-        st.write(f"**Extracurricular:** {extracurricular}")
-        st.write(f"**Internet Access:** {internet}")
-        st.write(f"**Family Income:** {family_income}")
-        st.write(f"**Stress Level:** {stress}/10")
-        st.write(f"**Sleep:** {sleep:.1f} hours/night")
+        with summary_col2:
+            st.write(f"**Projects:** {projects:.1f}")
+            st.write(f"**Study Hours:** {study_hours:.1f} hours/week")
+            st.write(f"**Extracurricular:** {extracurricular}")
+            st.write(f"**Internet Access:** {internet}")
+            st.write(f"**Family Income:** {family_income}")
+            st.write(f"**Stress Level:** {stress}/10")
+            st.write(f"**Sleep:** {sleep:.1f} hours/night")
