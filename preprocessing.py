@@ -84,6 +84,12 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
+print("\nTrain-test split:")
+print("Training records:", len(X_train))
+print("Testing records :", len(X_test))
+print("Training ratio  :", f"{len(X_train) / len(X) * 100:.0f}%")
+print("Testing ratio   :", f"{len(X_test) / len(X) * 100:.0f}%")
+
 
 # Save train/test data
 X_train.to_csv(
