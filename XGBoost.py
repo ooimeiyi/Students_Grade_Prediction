@@ -1,324 +1,1245 @@
 # ============================================================
-# XGBOOST + RANDOM FOREST HYBRID GRADE PREDICTION
+# STUDENT GRADE PREDICTION - STREAMLIT UI
 # ============================================================
 
 import os
 import joblib
 import pandas as pd
-import warnings
+import altair as alt
+import streamlit as st
 
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from xgboost import XGBClassifier
-
-warnings.filterwarnings("ignore")
 
 # ============================================================
 # SETTINGS
 # ============================================================
 
-ARTIFACTS_DIR = "artifacts"
-TARGET = "Grade"
-os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(BASE_DIR, "artifacts")
+
+# Visual identity for each grade, reused by the result card and the chart.
+GRADE_STYLE = {
+    "A": {"color": "#1DB954", "label": "Excellent"},
+    "B": {"color": "#2E9BF0", "label": "Good"},
+    "C": {"color": "#F5A623", "label": "Average"},
+    "D": {"color": "#E8622C", "label": "At risk"},
+    "F": {"color": "#E03C31", "label": "Failing"},
+}
+DEFAULT_STYLE = {"color": "#6B7280", "label": ""}
+
+# Fixed color and display order per model, reused by the comparison charts.
+MODEL_ORDER = ["ANN", "SVM", "XGBoost"]
+MODEL_COLORS = {
+    "ANN": "#A8E6B0",
+    "SVM": "#FDF1A0",
+    "XGBoost": "#A9D6F5",
+}
+DEFAULT_MODEL_COLOR = "#D1D5DB"
 
 # ============================================================
-# LOAD DATA
+# PAGE CONFIGURATION
 # ============================================================
 
-print("============================================")
-print("XGBOOST + RANDOM FOREST GRADE PREDICTION")
-print("============================================")
-
-X_train = pd.read_csv(os.path.join(ARTIFACTS_DIR, "X_train_raw.csv"))
-X_test = pd.read_csv(os.path.join(ARTIFACTS_DIR, "X_test_raw.csv"))
-y_train_raw = pd.read_csv(os.path.join(ARTIFACTS_DIR, "y_train.csv"))[TARGET]
-y_test_raw = pd.read_csv(os.path.join(ARTIFACTS_DIR, "y_test.csv"))[TARGET]
-
-# ============================================================
-# FEATURE COLUMNS
-# ============================================================
-
-feature_path = os.path.join(ARTIFACTS_DIR, "feature_columns.joblib")
-
-if os.path.exists(feature_path):
-    feature_columns = joblib.load(feature_path)
-    X_train = X_train[feature_columns]
-    X_test = X_test[feature_columns]
-else:
-    feature_columns = X_train.columns.tolist()
-
-# ============================================================
-# VALIDATION
-# ============================================================
-
-if TARGET in X_train.columns:
-    raise ValueError("ERROR: Grade exists inside X_train.")
-
-if TARGET in X_test.columns:
-    raise ValueError("ERROR: Grade exists inside X_test.")
-
-if list(X_train.columns) != list(X_test.columns):
-    raise ValueError("ERROR: X_train and X_test columns do not match.")
-
-# ============================================================
-# TARGET ENCODING
-# ============================================================
-
-label_encoder = LabelEncoder()
-y_train = label_encoder.fit_transform(y_train_raw)
-y_test = label_encoder.transform(y_test_raw)
-num_classes = len(label_encoder.classes_)
-
-print("\nGrade classes:")
-print(label_encoder.classes_)
-
-# ============================================================
-# FEATURE TYPES
-# ============================================================
-
-numeric_features = X_train.select_dtypes(include=["int64", "float64"]).columns.tolist()
-categorical_features = X_train.select_dtypes(include=["object", "category", "bool", "string"]).columns.tolist()
-
-# ============================================================
-# PREPROCESSING
-# ============================================================
-
-preprocessor = ColumnTransformer(transformers=[
-    ("num", Pipeline([("imputer", SimpleImputer(strategy="median"))]), numeric_features),
-    ("cat", Pipeline([
-        ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
-    ]), categorical_features)
-])
-
-# ============================================================
-# PREPROCESS DATA
-# ============================================================
-
-print("\nPreprocessing data...")
-
-X_train_processed = preprocessor.fit_transform(X_train)
-X_test_processed = preprocessor.transform(X_test)
-
-print("Training shape:", X_train_processed.shape)
-print("Testing shape :", X_test_processed.shape)
-
-# ============================================================
-# EVALUATION
-# ============================================================
-
-def evaluate(y_true, y_pred):
-    return {
-        "Accuracy": accuracy_score(y_true, y_pred),
-        "F1": f1_score(y_true, y_pred, average="weighted", zero_division=0),
-        "Precision": precision_score(y_true, y_pred, average="weighted", zero_division=0),
-        "Recall": recall_score(y_true, y_pred, average="weighted", zero_division=0)
-    }
-
-# ============================================================
-# XGBOOST BASELINE
-# ============================================================
-
-print("\n============================================")
-print("XGBOOST BASELINE")
-print("============================================")
-
-xgb_baseline = XGBClassifier(
-    n_estimators=300,
-    max_depth=5,
-    learning_rate=0.05,
-    min_child_weight=1,
-    gamma=0,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    reg_alpha=0,
-    reg_lambda=1,
-    objective="multi:softprob",
-    num_class=num_classes,
-    eval_metric="mlogloss",
-    random_state=42,
-    n_jobs=-1
+st.set_page_config(
+    page_title="Student Grade Prediction",
+    page_icon="🎓",
+    layout="wide"
 )
 
-xgb_baseline.fit(X_train_processed, y_train)
-baseline_pred = xgb_baseline.predict(X_test_processed)
-baseline_result = evaluate(y_test, baseline_pred)
-
 # ============================================================
-# XGBOOST FINE-TUNING
+# TITLE
 # ============================================================
 
-print("\n============================================")
-print("FINE-TUNING XGBOOST")
-print("============================================")
+st.title("🎓 Student Grade Prediction System")
+st.caption("Predict a student's final grade using trained machine learning models.")
 
-param_grid = {
-    "n_estimators": [100, 200, 300, 400, 500],
-    "max_depth": [2, 3, 4, 5, 6],
-    "learning_rate": [0.01, 0.03, 0.05, 0.08, 0.10, 0.15],
-    "min_child_weight": [1, 3, 5, 7, 10],
-    "gamma": [0, 0.1, 0.3, 0.5, 1],
-    "subsample": [0.7, 0.8, 0.9, 1.0],
-    "colsample_bytree": [0.7, 0.8, 0.9, 1.0],
-    "reg_alpha": [0, 0.01, 0.1, 1],
-    "reg_lambda": [1, 2, 5, 10, 20]
+# ============================================================
+# MODEL FILES
+# ============================================================
+
+MODEL_FILES = {
+    "XGBoost": "xgboost_grade_model.pkl",
+    "ANN": "ann_grade_model.pkl",
+    "SVM": "svm_grade_model.pkl"
 }
 
-xgb_tuning = XGBClassifier(
-    objective="multi:softprob",
-    num_class=num_classes,
-    eval_metric="mlogloss",
-    random_state=42,
-    n_jobs=-1
-)
+PREPROCESSOR_FILES = {
+    "XGBoost": "xgboost_preprocessor.pkl",
+    "ANN": "ann_preprocessor.pkl",
+    "SVM": "svm_preprocessor.pkl"
+}
 
-cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-
-search = RandomizedSearchCV(
-    estimator=xgb_tuning,
-    param_distributions=param_grid,
-    n_iter=50,
-    scoring="f1_weighted",
-    cv=cv,
-    random_state=42,
-    n_jobs=-1,
-    verbose=1
-)
-
-search.fit(X_train_processed, y_train)
+ENCODER_FILES = {
+    "XGBoost": "xgboost_label_encoder.pkl",
+    "ANN": "ann_label_encoder.pkl",
+    "SVM": "svm_label_encoder.pkl"
+}
 
 # ============================================================
-# BEST XGBOOST
+# XGBOOST + RANDOM FOREST HYBRID FILES
 # ============================================================
 
-xgb_model = search.best_estimator_
-xgb_pred = xgb_model.predict(X_test_processed)
-xgb_prob = xgb_model.predict_proba(X_test_processed)
-xgb_result = evaluate(y_test, xgb_pred)
-
-print("\n============================================")
-print("XGBOOST FINE-TUNING RESULTS")
-print("============================================")
-
-print(f"{'Metric':<12}{'Before':>12}{'After':>12}{'Change':>12}")
-print("-" * 48)
-
-for metric in ["Accuracy", "F1", "Precision", "Recall"]:
-    before = baseline_result[metric]
-    after = xgb_result[metric]
-    print(f"{metric:<12}{before:>12.4f}{after:>12.4f}{after - before:>+12.4f}")
+HYBRID_RF_FILE = "random_forest_grade_model.pkl"
+HYBRID_WEIGHT_FILE = "hybrid_weights.joblib"
 
 # ============================================================
-# RANDOM FOREST
+# LOAD MODELS
 # ============================================================
 
-print("\n============================================")
-print("RANDOM FOREST")
-print("============================================")
+@st.cache_resource
+def load_artifacts():
 
-rf_model = RandomForestClassifier(
-    n_estimators=300,
-    max_features="sqrt",
-    random_state=42,
-    n_jobs=-1
-)
+    artifacts = {}
+    errors = {}
 
-rf_model.fit(X_train_processed, y_train)
-rf_pred = rf_model.predict(X_test_processed)
-rf_prob = rf_model.predict_proba(X_test_processed)
-rf_result = evaluate(y_test, rf_pred)
+    # ========================================================
+    # XGBOOST + RANDOM FOREST HYBRID
+    # ========================================================
 
-# ============================================================
-# HYBRID
-# ============================================================
-
-print("\n============================================")
-print("XGBOOST + RANDOM FOREST HYBRID")
-print("============================================")
-
-best_weight = 0.5
-best_f1 = -1
-
-for xgb_weight in [0.5, 0.6, 0.7, 0.8, 0.9]:
-
-    rf_weight = 1 - xgb_weight
-
-    hybrid_prob = xgb_weight * xgb_prob + rf_weight * rf_prob
-    hybrid_pred = hybrid_prob.argmax(axis=1)
-
-    hybrid_result_temp = evaluate(y_test, hybrid_pred)
-
-    print(
-        f"XGB={xgb_weight:.1f} "
-        f"RF={rf_weight:.1f} "
-        f"Accuracy={hybrid_result_temp['Accuracy']:.4f} "
-        f"F1={hybrid_result_temp['F1']:.4f}"
+    xgb_model_path = os.path.join(
+        ARTIFACTS_DIR,
+        MODEL_FILES["XGBoost"]
     )
 
-    if hybrid_result_temp["F1"] > best_f1:
-        best_f1 = hybrid_result_temp["F1"]
-        best_weight = xgb_weight
-
-rf_weight = 1 - best_weight
-
-final_prob = best_weight * xgb_prob + rf_weight * rf_prob
-final_pred = final_prob.argmax(axis=1)
-hybrid_result = evaluate(y_test, final_pred)
-
-# ============================================================
-# MODEL RESULTS
-# ============================================================
-
-print("\n============================================")
-print("MODEL RESULTS")
-print("============================================")
-
-print(f"{'Model':<20}{'Accuracy':<12}{'F1':<12}{'Precision':<12}{'Recall':<12}")
-print("-" * 68)
-
-for name, result in [
-    ("XGBoost", xgb_result),
-    ("Random Forest", rf_result),
-    ("XGB + RF Hybrid", hybrid_result)
-]:
-    print(
-        f"{name:<20}"
-        f"{result['Accuracy']:<12.4f}"
-        f"{result['F1']:<12.4f}"
-        f"{result['Precision']:<12.4f}"
-        f"{result['Recall']:<12.4f}"
+    xgb_preprocessor_path = os.path.join(
+        ARTIFACTS_DIR,
+        PREPROCESSOR_FILES["XGBoost"]
     )
 
-print(f"\nBest Weight: XGBoost {best_weight:.1f} / Random Forest {rf_weight:.1f}")
+    xgb_encoder_path = os.path.join(
+        ARTIFACTS_DIR,
+        ENCODER_FILES["XGBoost"]
+    )
+
+    rf_model_path = os.path.join(
+        ARTIFACTS_DIR,
+        HYBRID_RF_FILE
+    )
+
+    hybrid_weight_path = os.path.join(
+        ARTIFACTS_DIR,
+        HYBRID_WEIGHT_FILE
+    )
+
+    xgb_missing = []
+
+    if not os.path.exists(xgb_model_path):
+        xgb_missing.append(MODEL_FILES["XGBoost"])
+
+    if not os.path.exists(xgb_preprocessor_path):
+        xgb_missing.append(PREPROCESSOR_FILES["XGBoost"])
+
+    if not os.path.exists(xgb_encoder_path):
+        xgb_missing.append(ENCODER_FILES["XGBoost"])
+
+    if not os.path.exists(rf_model_path):
+        xgb_missing.append(HYBRID_RF_FILE)
+
+    if not os.path.exists(hybrid_weight_path):
+        xgb_missing.append(HYBRID_WEIGHT_FILE)
+
+    if xgb_missing:
+
+        errors["XGBoost"] = xgb_missing
+
+    else:
+
+        try:
+
+            artifacts["XGBoost"] = {
+                "type": "hybrid",
+
+                "xgb_model": joblib.load(
+                    xgb_model_path
+                ),
+
+                "rf_model": joblib.load(
+                    rf_model_path
+                ),
+
+                "preprocessor": joblib.load(
+                    xgb_preprocessor_path
+                ),
+
+                "encoder": joblib.load(
+                    xgb_encoder_path
+                ),
+
+                "weights": joblib.load(
+                    hybrid_weight_path
+                )
+            }
+
+        except Exception as e:
+
+            errors["XGBoost"] = [str(e)]
+
+    # ========================================================
+    # ANN + SVM
+    # ========================================================
+
+    for model_name in ["ANN", "SVM"]:
+
+        model_path = os.path.join(
+            ARTIFACTS_DIR,
+            MODEL_FILES[model_name]
+        )
+
+        preprocessor_path = os.path.join(
+            ARTIFACTS_DIR,
+            PREPROCESSOR_FILES[model_name]
+        )
+
+        encoder_path = os.path.join(
+            ARTIFACTS_DIR,
+            ENCODER_FILES[model_name]
+        )
+
+        missing = []
+
+        if not os.path.exists(model_path):
+            missing.append(MODEL_FILES[model_name])
+
+        if not os.path.exists(preprocessor_path):
+            missing.append(PREPROCESSOR_FILES[model_name])
+
+        if not os.path.exists(encoder_path):
+            missing.append(ENCODER_FILES[model_name])
+
+        if missing:
+
+            errors[model_name] = missing
+
+            continue
+
+        try:
+
+            artifacts[model_name] = {
+                "type": "single",
+
+                "model": joblib.load(
+                    model_path
+                ),
+
+                "preprocessor": joblib.load(
+                    preprocessor_path
+                ),
+
+                "encoder": joblib.load(
+                    encoder_path
+                )
+            }
+
+        except Exception as e:
+
+            errors[model_name] = [str(e)]
+
+    return artifacts, errors
+
+
+artifacts, artifact_errors = load_artifacts()
 
 # ============================================================
-# SAVE
+# ARTIFACT ERROR INFORMATION
 # ============================================================
 
-joblib.dump(xgb_model, os.path.join(ARTIFACTS_DIR, "xgboost_grade_model.pkl"))
-joblib.dump(preprocessor, os.path.join(ARTIFACTS_DIR, "xgboost_preprocessor.pkl"))
-joblib.dump(label_encoder, os.path.join(ARTIFACTS_DIR, "xgboost_label_encoder.pkl"))
-joblib.dump(feature_columns, os.path.join(ARTIFACTS_DIR, "xgboost_feature_columns.joblib"))
+if artifact_errors:
 
-joblib.dump(rf_model, os.path.join(ARTIFACTS_DIR, "random_forest_grade_model.pkl"))
+    with st.expander("⚠️ Artifact Problems"):
 
-joblib.dump(
-    {"xgb_weight": best_weight, "rf_weight": rf_weight},
-    os.path.join(ARTIFACTS_DIR, "hybrid_weights.joblib")
+        for model_name, errors in artifact_errors.items():
+
+            st.write(f"**{model_name}:**")
+
+            for error in errors:
+
+                st.write(f"- {error}")
+
+# ============================================================
+# NO MODEL
+# ============================================================
+
+if not artifacts:
+
+    st.error("❌ No trained models were found.")
+
+    st.write("Expected artifact folder:")
+
+    st.code(
+        ARTIFACTS_DIR
+    )
+
+    st.write("Run:")
+
+    st.code(
+        "python ANN.py\n"
+        "python SVM.py\n"
+        "python XGBoost.py"
+    )
+
+    st.stop()
+
+# ============================================================
+# VIEW SELECTION
+# ============================================================
+
+current_view = st.sidebar.radio(
+    "Choose a view",
+    ["Predict Grade", "Compare Models"]
 )
 
-print("\n============================================")
-print("XGBOOST ARTIFACTS SAVED")
-print("============================================")
-print("xgboost_grade_model.pkl")
-print("xgboost_preprocessor.pkl")
-print("xgboost_label_encoder.pkl")
-print("xgboost_feature_columns.joblib")
-print("random_forest_grade_model.pkl")
-print("hybrid_weights.joblib")
-print("\nXGBoost training complete.")
+# ============================================================
+# MODEL COMPARISON
+# ============================================================
+
+if current_view == "Compare Models":
+
+    st.header("📊 Model Comparison")
+
+    test_x_path = os.path.join(
+        ARTIFACTS_DIR,
+        "X_test_raw.csv"
+    )
+
+    test_y_path = os.path.join(
+        ARTIFACTS_DIR,
+        "y_test.csv"
+    )
+
+    if (
+        not os.path.exists(test_x_path)
+        or not os.path.exists(test_y_path)
+    ):
+
+        st.error(
+            "X_test_raw.csv or y_test.csv is missing."
+        )
+
+        st.stop()
+
+    X_test = pd.read_csv(
+        test_x_path
+    )
+
+    y_test = pd.read_csv(
+        test_y_path
+    )["Grade"]
+
+    results = []
+
+    # ========================================================
+    # EVALUATE EACH MODEL
+    # ========================================================
+
+    for name, artifact in artifacts.items():
+
+        try:
+
+            processed_test = artifact[
+                "preprocessor"
+            ].transform(X_test)
+
+            # ------------------------------------------------
+            # ANN / SVM
+            # ------------------------------------------------
+
+            if artifact["type"] == "single":
+
+                encoded_prediction = artifact[
+                    "model"
+                ].predict(
+                    processed_test
+                )
+
+                prediction = artifact[
+                    "encoder"
+                ].inverse_transform(
+                    encoded_prediction
+                )
+
+            # ------------------------------------------------
+            # XGBOOST + RANDOM FOREST HYBRID
+            # ------------------------------------------------
+
+            else:
+
+                xgb_prob = artifact[
+                    "xgb_model"
+                ].predict_proba(
+                    processed_test
+                )
+
+                rf_prob = artifact[
+                    "rf_model"
+                ].predict_proba(
+                    processed_test
+                )
+
+                xgb_weight = artifact[
+                    "weights"
+                ]["xgb_weight"]
+
+                rf_weight = artifact[
+                    "weights"
+                ]["rf_weight"]
+
+                hybrid_prob = (
+                    xgb_weight * xgb_prob
+                    +
+                    rf_weight * rf_prob
+                )
+
+                hybrid_prediction_encoded = (
+                    hybrid_prob.argmax(
+                        axis=1
+                    )
+                )
+
+                prediction = artifact[
+                    "encoder"
+                ].inverse_transform(
+                    hybrid_prediction_encoded
+                )
+
+            # ------------------------------------------------
+            # TEST RESULTS
+            # ------------------------------------------------
+
+            results.append({
+                "Model": name,
+
+                "Accuracy": accuracy_score(
+                    y_test,
+                    prediction
+                ),
+
+                "F1 Score": f1_score(
+                    y_test,
+                    prediction,
+                    average="weighted",
+                    zero_division=0
+                ),
+
+                "Precision": precision_score(
+                    y_test,
+                    prediction,
+                    average="weighted",
+                    zero_division=0
+                ),
+
+                "Recall": recall_score(
+                    y_test,
+                    prediction,
+                    average="weighted",
+                    zero_division=0
+                )
+            })
+
+        except Exception as e:
+
+            st.warning(
+                f"{name} could not be evaluated: {e}"
+            )
+
+    comparison_df = pd.DataFrame(
+        results
+    )
+
+    if comparison_df.empty:
+
+        st.warning(
+            "No models could be evaluated."
+        )
+
+        st.stop()
+
+    # ========================================================
+    # BEST MODEL CARD
+    # ========================================================
+
+    best_model_row = comparison_df.loc[
+        comparison_df["F1 Score"].idxmax()
+    ]
+
+    st.metric(
+        label="🏆 Top Performing Model (Highest F1)",
+        value=best_model_row["Model"],
+        delta=f"F1: {best_model_row['F1 Score']:.4f}"
+    )
+
+    # ========================================================
+    # METRICS TABLE
+    # ========================================================
+
+    st.subheader(
+        "📋 Evaluation Metrics Summary"
+    )
+
+    st.dataframe(
+        comparison_df.style.format({
+            "Accuracy": "{:.4f}",
+            "F1 Score": "{:.4f}",
+            "Precision": "{:.4f}",
+            "Recall": "{:.4f}"
+        }),
+        use_container_width=True
+    )
+
+    # ========================================================
+    # METRIC COMPARISON CHARTS
+    # ========================================================
+
+    st.subheader(
+        "📈 Metric Comparison"
+    )
+
+    metric_tabs = st.tabs([
+        "Accuracy",
+        "F1 Score",
+        "Precision",
+        "Recall"
+    ])
+
+    models_present = comparison_df[
+        "Model"
+    ].tolist()
+
+    ordered_models = [
+        m
+        for m in MODEL_ORDER
+        if m in models_present
+    ] + [
+        m
+        for m in models_present
+        if m not in MODEL_ORDER
+    ]
+
+    color_domain = ordered_models
+
+    color_range = [
+        MODEL_COLORS.get(
+            m,
+            DEFAULT_MODEL_COLOR
+        )
+        for m in ordered_models
+    ]
+
+    def render_metric_chart(
+        metric_column
+    ):
+
+        chart = (
+            alt.Chart(
+                comparison_df
+            )
+            .mark_bar(
+                cornerRadiusTopLeft=4,
+                cornerRadiusTopRight=4
+            )
+            .encode(
+
+                x=alt.X(
+                    "Model:N",
+                    title=None,
+                    sort=ordered_models
+                ),
+
+                y=alt.Y(
+                    f"{metric_column}:Q",
+                    title=metric_column,
+                    scale=alt.Scale(
+                        domain=[0, 1]
+                    )
+                ),
+
+                color=alt.Color(
+                    "Model:N",
+                    scale=alt.Scale(
+                        domain=color_domain,
+                        range=color_range
+                    ),
+                    legend=None
+                ),
+
+                tooltip=[
+                    "Model",
+
+                    alt.Tooltip(
+                        f"{metric_column}:Q",
+                        format=".4f"
+                    )
+                ]
+            )
+            .properties(
+                height=320
+            )
+        )
+
+        st.altair_chart(
+            chart,
+            use_container_width=True
+        )
+
+    with metric_tabs[0]:
+
+        render_metric_chart(
+            "Accuracy"
+        )
+
+    with metric_tabs[1]:
+
+        render_metric_chart(
+            "F1 Score"
+        )
+
+    with metric_tabs[2]:
+
+        render_metric_chart(
+            "Precision"
+        )
+
+    with metric_tabs[3]:
+
+        render_metric_chart(
+            "Recall"
+        )
+
+    st.stop()
+
+# ============================================================
+# PREDICTION MODEL
+# ============================================================
+
+model_name = st.sidebar.selectbox(
+    "Choose Prediction Model",
+    list(artifacts.keys())
+)
+
+selected_artifact = artifacts[
+    model_name
+]
+
+selected_preprocessor = selected_artifact[
+    "preprocessor"
+]
+
+selected_encoder = selected_artifact[
+    "encoder"
+]
+
+st.sidebar.success(
+    f"Active Model: {model_name}"
+)
+
+# ============================================================
+# INPUT
+# ============================================================
+
+st.header(
+    "📝 Student Performance Information"
+)
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+
+    department = st.selectbox(
+        "Department",
+        [
+            "CS",
+            "Engineering",
+            "Business",
+            "Mathematics"
+        ]
+    )
+
+    attendance = st.number_input(
+        "Attendance (%)",
+        0.0,
+        100.0,
+        80.0,
+        0.1
+    )
+
+    midterm = st.number_input(
+        "Midterm Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    final_score = st.number_input(
+        "Final Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    assignments = st.number_input(
+        "Assignments Average",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+with col2:
+
+    quizzes = st.number_input(
+        "Quizzes Average",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    participation = st.number_input(
+        "Participation Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    projects = st.number_input(
+        "Projects Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    study_hours = st.number_input(
+        "Study Hours per Week",
+        0.0,
+        100.0,
+        10.0,
+        0.5
+    )
+
+    extracurricular = st.selectbox(
+        "Extracurricular Activities",
+        [
+            "Yes",
+            "No"
+        ]
+    )
+
+with col3:
+
+    internet = st.selectbox(
+        "Internet Access at Home",
+        [
+            "Yes",
+            "No"
+        ]
+    )
+
+    family_income = st.selectbox(
+        "Family Income Level",
+        [
+            "Low",
+            "Medium",
+            "High"
+        ]
+    )
+
+    stress = st.slider(
+        "Stress Level (1-10)",
+        1,
+        10,
+        5
+    )
+
+    sleep = st.number_input(
+        "Sleep Hours per Night",
+        0.0,
+        24.0,
+        7.0,
+        0.1
+    )
+
+# ============================================================
+# PREDICT BUTTON
+# ============================================================
+
+st.markdown("---")
+
+predict_button = st.button(
+    "🔮 Predict Grade",
+    type="primary",
+    use_container_width=True
+)
+
+# ============================================================
+# PREDICTION
+# ============================================================
+
+if predict_button:
+
+    input_data = pd.DataFrame([{
+
+        "Department": department,
+
+        "Attendance (%)": attendance,
+
+        "Midterm_Score": midterm,
+
+        "Final_Score": final_score,
+
+        "Assignments_Avg": assignments,
+
+        "Quizzes_Avg": quizzes,
+
+        "Participation_Score": participation,
+
+        "Projects_Score": projects,
+
+        "Study_Hours_per_Week": study_hours,
+
+        "Extracurricular_Activities": extracurricular,
+
+        "Internet_Access_at_Home": internet,
+
+        "Family_Income_Level": family_income,
+
+        "Stress_Level (1-10)": stress,
+
+        "Sleep_Hours_per_Night": sleep
+
+    }])
+
+    # ========================================================
+    # CHECK INPUT COLUMNS
+    # ========================================================
+
+    try:
+
+        processed_input = selected_preprocessor.transform(
+            input_data
+        )
+
+    except Exception as e:
+
+        st.error(
+            "❌ Error preprocessing input."
+        )
+
+        st.exception(e)
+
+        st.write(
+            "Input columns:"
+        )
+
+        st.write(
+            input_data.columns.tolist()
+        )
+
+        st.stop()
+
+    # ========================================================
+    # PREDICT
+    # ========================================================
+
+    try:
+
+        # ----------------------------------------------------
+        # ANN / SVM
+        # ----------------------------------------------------
+
+        if selected_artifact["type"] == "single":
+
+            prediction_encoded = selected_artifact[
+                "model"
+            ].predict(
+                processed_input
+            )
+
+            predicted_grade = selected_artifact[
+                "encoder"
+            ].inverse_transform(
+                prediction_encoded
+            )[0]
+
+        # ----------------------------------------------------
+        # XGBOOST + RANDOM FOREST HYBRID
+        # ----------------------------------------------------
+
+        else:
+
+            xgb_prob = selected_artifact[
+                "xgb_model"
+            ].predict_proba(
+                processed_input
+            )[0]
+
+            rf_prob = selected_artifact[
+                "rf_model"
+            ].predict_proba(
+                processed_input
+            )[0]
+
+            xgb_weight = selected_artifact[
+                "weights"
+            ]["xgb_weight"]
+
+            rf_weight = selected_artifact[
+                "weights"
+            ]["rf_weight"]
+
+            hybrid_probabilities = (
+                xgb_weight * xgb_prob
+                +
+                rf_weight * rf_prob
+            )
+
+            prediction_encoded = [
+                hybrid_probabilities.argmax()
+            ]
+
+            predicted_grade = selected_artifact[
+                "encoder"
+            ].inverse_transform(
+                prediction_encoded
+            )[0]
+
+    except Exception as e:
+
+        st.error(
+            "❌ Prediction failed."
+        )
+
+        st.exception(e)
+
+        st.stop()
+
+    # ========================================================
+    # BUILD PROBABILITY TABLE
+    # ========================================================
+
+    probability_df = None
+    top_confidence = None
+
+    try:
+
+        # ----------------------------------------------------
+        # ANN / SVM
+        # ----------------------------------------------------
+
+        if selected_artifact["type"] == "single":
+
+            if hasattr(
+                selected_artifact["model"],
+                "predict_proba"
+            ):
+
+                probabilities = selected_artifact[
+                    "model"
+                ].predict_proba(
+                    processed_input
+                )[0]
+
+        # ----------------------------------------------------
+        # XGBOOST + RANDOM FOREST HYBRID
+        # ----------------------------------------------------
+
+        else:
+
+            probabilities = hybrid_probabilities
+
+        class_names = selected_encoder.classes_
+
+        probability_df = pd.DataFrame({
+
+            "Grade": class_names,
+
+            "Probability": probabilities
+
+        }).sort_values(
+            "Probability",
+            ascending=False
+        ).reset_index(
+            drop=True
+        )
+
+        top_confidence = probability_df.loc[
+            probability_df["Grade"] == predicted_grade,
+            "Probability"
+        ].iloc[0]
+
+    except Exception as e:
+
+        st.warning(
+            f"Confidence display unavailable: {e}"
+        )
+
+    # ========================================================
+    # RESULT
+    # ========================================================
+
+    st.markdown("---")
+
+    st.header(
+        "🎯 Prediction Result"
+    )
+
+    style = GRADE_STYLE.get(
+        str(predicted_grade).upper(),
+        DEFAULT_STYLE
+    )
+
+    # ========================================================
+    # RESULT CARD - NO HTML
+    # ========================================================
+
+    res_col1, res_col2 = st.columns(
+        [1, 2],
+        gap="large"
+    )
+
+    with res_col1:
+
+        st.subheader(
+            "Predicted Grade"
+        )
+
+        st.success(
+            f"## {predicted_grade}"
+        )
+
+        if style["label"]:
+
+            st.write(
+                f"**{style['label']}**"
+            )
+
+        if top_confidence is not None:
+
+            st.metric(
+                "Confidence",
+                f"{top_confidence * 100:.1f}%"
+            )
+
+        st.caption(
+            f"Engineered by {model_name}"
+        )
+
+        # Show the hybrid weights only for XGBoost
+        if selected_artifact["type"] == "hybrid":
+
+            st.write(
+                "**Hybrid Model Weights**"
+            )
+
+            st.write(
+                f"XGBoost: "
+                f"{xgb_weight:.1f}"
+            )
+
+            st.write(
+                f"Random Forest: "
+                f"{rf_weight:.1f}"
+            )
+
+    # ========================================================
+    # CLASS CONFIDENCE BREAKDOWN
+    # ========================================================
+
+    with res_col2:
+
+        st.subheader(
+            "📊 Class Confidence Breakdown"
+        )
+
+        if probability_df is not None:
+
+            chart_df = probability_df.copy()
+
+            chart_df["Probability (%)"] = (
+                chart_df["Probability"] * 100
+            )
+
+            chart_df["Predicted"] = (
+                chart_df["Grade"]
+                == predicted_grade
+            )
+
+            grade_order = [
+                g
+                for g in GRADE_STYLE
+                if g in chart_df["Grade"].values
+            ] or None
+
+            confidence_chart = (
+
+                alt.Chart(
+                    chart_df
+                )
+
+                .mark_bar(
+                    cornerRadiusTopLeft=4,
+                    cornerRadiusTopRight=4
+                )
+
+                .encode(
+
+                    x=alt.X(
+                        "Grade:N",
+                        sort=grade_order,
+                        title=None
+                    ),
+
+                    y=alt.Y(
+                        "Probability (%):Q",
+                        title="Probability (%)",
+                        scale=alt.Scale(
+                            domain=[0, 100]
+                        )
+                    ),
+
+                    color=alt.condition(
+                        alt.datum.Predicted,
+                        alt.value(style["color"]),
+                        alt.value("#D1D5DB")
+                    ),
+
+                    tooltip=[
+                        "Grade",
+
+                        alt.Tooltip(
+                            "Probability (%):Q",
+                            format=".1f"
+                        )
+                    ]
+                )
+            )
+
+            labels = (
+
+                alt.Chart(
+                    chart_df
+                )
+
+                .mark_text(
+                    dy=-8,
+                    fontWeight="bold"
+                )
+
+                .encode(
+
+                    x=alt.X(
+                        "Grade:N",
+                        sort=grade_order
+                    ),
+
+                    y="Probability (%):Q",
+
+                    text=alt.Text(
+                        "Probability (%):Q",
+                        format=".1f"
+                    )
+                )
+            )
+
+            st.altair_chart(
+                (
+                    confidence_chart
+                    +
+                    labels
+                ).properties(
+                    height=320
+                ),
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "This model does not expose class probabilities."
+            )
+
+    # ========================================================
+    # STUDENT SUMMARY
+    # ========================================================
+
+    with st.expander(
+        "📋 Student Performance Summary",
+        expanded=False
+    ):
+
+        summary_col1, summary_col2 = st.columns(2)
+
+        with summary_col1:
+
+            st.write(
+                f"**Department:** {department}"
+            )
+
+            st.write(
+                f"**Attendance:** "
+                f"{attendance:.1f}%"
+            )
+
+            st.write(
+                f"**Midterm Score:** "
+                f"{midterm:.1f}"
+            )
+
+            st.write(
+                f"**Final Score:** "
+                f"{final_score:.1f}"
+            )
+
+            st.write(
+                f"**Assignments:** "
+                f"{assignments:.1f}"
+            )
+
+            st.write(
+                f"**Quizzes:** "
+                f"{quizzes:.1f}"
+            )
+
+            st.write(
+                f"**Participation:** "
+                f"{participation:.1f}"
+            )
+
+        with summary_col2:
+
+            st.write(
+                f"**Projects:** "
+                f"{projects:.1f}"
+            )
+
+            st.write(
+                f"**Study Hours:** "
+                f"{study_hours:.1f} hours/week"
+            )
+
+            st.write(
+                f"**Extracurricular:** "
+                f"{extracurricular}"
+            )
+
+            st.write(
+                f"**Internet Access:** "
+                f"{internet}"
+            )
+
+            st.write(
+                f"**Family Income:** "
+                f"{family_income}"
+            )
+
+            st.write(
+                f"**Stress Level:** "
+                f"{stress}/10"
+            )
+
+            st.write(
+                f"**Sleep:** "
+                f"{sleep:.1f} hours/night"
+            )

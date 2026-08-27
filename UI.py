@@ -76,39 +76,162 @@ ENCODER_FILES = {
 }
 
 # ============================================================
+# XGBOOST + RANDOM FOREST HYBRID FILES
+# ============================================================
+
+HYBRID_RF_FILE = "random_forest_grade_model.pkl"
+HYBRID_WEIGHT_FILE = "hybrid_weights.joblib"
+
+# ============================================================
 # LOAD MODELS
 # ============================================================
 
 @st.cache_resource
 def load_artifacts():
+
     artifacts = {}
     errors = {}
 
-    for model_name in MODEL_FILES:
-        model_path = os.path.join(ARTIFACTS_DIR, MODEL_FILES[model_name])
-        preprocessor_path = os.path.join(ARTIFACTS_DIR, PREPROCESSOR_FILES[model_name])
-        encoder_path = os.path.join(ARTIFACTS_DIR, ENCODER_FILES[model_name])
+    # ========================================================
+    # XGBOOST + RANDOM FOREST HYBRID
+    # ========================================================
+
+    xgb_model_path = os.path.join(
+        ARTIFACTS_DIR,
+        MODEL_FILES["XGBoost"]
+    )
+
+    xgb_preprocessor_path = os.path.join(
+        ARTIFACTS_DIR,
+        PREPROCESSOR_FILES["XGBoost"]
+    )
+
+    xgb_encoder_path = os.path.join(
+        ARTIFACTS_DIR,
+        ENCODER_FILES["XGBoost"]
+    )
+
+    rf_model_path = os.path.join(
+        ARTIFACTS_DIR,
+        HYBRID_RF_FILE
+    )
+
+    hybrid_weight_path = os.path.join(
+        ARTIFACTS_DIR,
+        HYBRID_WEIGHT_FILE
+    )
+
+    xgb_missing = []
+
+    if not os.path.exists(xgb_model_path):
+        xgb_missing.append(MODEL_FILES["XGBoost"])
+
+    if not os.path.exists(xgb_preprocessor_path):
+        xgb_missing.append(PREPROCESSOR_FILES["XGBoost"])
+
+    if not os.path.exists(xgb_encoder_path):
+        xgb_missing.append(ENCODER_FILES["XGBoost"])
+
+    if not os.path.exists(rf_model_path):
+        xgb_missing.append(HYBRID_RF_FILE)
+
+    if not os.path.exists(hybrid_weight_path):
+        xgb_missing.append(HYBRID_WEIGHT_FILE)
+
+    if xgb_missing:
+
+        errors["XGBoost"] = xgb_missing
+
+    else:
+
+        try:
+
+            artifacts["XGBoost"] = {
+                "type": "hybrid",
+
+                "xgb_model": joblib.load(
+                    xgb_model_path
+                ),
+
+                "rf_model": joblib.load(
+                    rf_model_path
+                ),
+
+                "preprocessor": joblib.load(
+                    xgb_preprocessor_path
+                ),
+
+                "encoder": joblib.load(
+                    xgb_encoder_path
+                ),
+
+                "weights": joblib.load(
+                    hybrid_weight_path
+                )
+            }
+
+        except Exception as e:
+
+            errors["XGBoost"] = [str(e)]
+
+    # ========================================================
+    # ANN + SVM
+    # ========================================================
+
+    for model_name in ["ANN", "SVM"]:
+
+        model_path = os.path.join(
+            ARTIFACTS_DIR,
+            MODEL_FILES[model_name]
+        )
+
+        preprocessor_path = os.path.join(
+            ARTIFACTS_DIR,
+            PREPROCESSOR_FILES[model_name]
+        )
+
+        encoder_path = os.path.join(
+            ARTIFACTS_DIR,
+            ENCODER_FILES[model_name]
+        )
 
         missing = []
 
         if not os.path.exists(model_path):
             missing.append(MODEL_FILES[model_name])
+
         if not os.path.exists(preprocessor_path):
             missing.append(PREPROCESSOR_FILES[model_name])
+
         if not os.path.exists(encoder_path):
             missing.append(ENCODER_FILES[model_name])
 
         if missing:
+
             errors[model_name] = missing
+
             continue
 
         try:
+
             artifacts[model_name] = {
-                "model": joblib.load(model_path),
-                "preprocessor": joblib.load(preprocessor_path),
-                "encoder": joblib.load(encoder_path)
+                "type": "single",
+
+                "model": joblib.load(
+                    model_path
+                ),
+
+                "preprocessor": joblib.load(
+                    preprocessor_path
+                ),
+
+                "encoder": joblib.load(
+                    encoder_path
+                )
             }
+
         except Exception as e:
+
             errors[model_name] = [str(e)]
 
     return artifacts, errors
@@ -121,10 +244,15 @@ artifacts, artifact_errors = load_artifacts()
 # ============================================================
 
 if artifact_errors:
+
     with st.expander("⚠️ Artifact Problems"):
+
         for model_name, errors in artifact_errors.items():
+
             st.write(f"**{model_name}:**")
+
             for error in errors:
+
                 st.write(f"- {error}")
 
 # ============================================================
@@ -132,15 +260,23 @@ if artifact_errors:
 # ============================================================
 
 if not artifacts:
+
     st.error("❌ No trained models were found.")
+
     st.write("Expected artifact folder:")
-    st.code(ARTIFACTS_DIR)
+
+    st.code(
+        ARTIFACTS_DIR
+    )
+
     st.write("Run:")
+
     st.code(
         "python ANN.py\n"
         "python SVM.py\n"
         "python XGBoost.py"
     )
+
     st.stop()
 
 # ============================================================
@@ -157,53 +293,188 @@ current_view = st.sidebar.radio(
 # ============================================================
 
 if current_view == "Compare Models":
+
     st.header("📊 Model Comparison")
 
-    test_x_path = os.path.join(ARTIFACTS_DIR, "X_test_raw.csv")
-    test_y_path = os.path.join(ARTIFACTS_DIR, "y_test.csv")
+    test_x_path = os.path.join(
+        ARTIFACTS_DIR,
+        "X_test_raw.csv"
+    )
 
-    if not os.path.exists(test_x_path) or not os.path.exists(test_y_path):
-        st.error("X_test_raw.csv or y_test.csv is missing.")
+    test_y_path = os.path.join(
+        ARTIFACTS_DIR,
+        "y_test.csv"
+    )
+
+    if (
+        not os.path.exists(test_x_path)
+        or not os.path.exists(test_y_path)
+    ):
+
+        st.error(
+            "X_test_raw.csv or y_test.csv is missing."
+        )
+
         st.stop()
 
-    X_test = pd.read_csv(test_x_path)
-    y_test = pd.read_csv(test_y_path)["Grade"]
+    X_test = pd.read_csv(
+        test_x_path
+    )
+
+    y_test = pd.read_csv(
+        test_y_path
+    )["Grade"]
 
     results = []
 
+    # ========================================================
+    # EVALUATE EACH MODEL
+    # ========================================================
+
     for name, artifact in artifacts.items():
+
         try:
-            processed_test = artifact["preprocessor"].transform(X_test)
-            encoded_prediction = artifact["model"].predict(processed_test)
-            prediction = artifact["encoder"].inverse_transform(encoded_prediction)
+
+            processed_test = artifact[
+                "preprocessor"
+            ].transform(X_test)
+
+            # ------------------------------------------------
+            # ANN / SVM
+            # ------------------------------------------------
+
+            if artifact["type"] == "single":
+
+                encoded_prediction = artifact[
+                    "model"
+                ].predict(
+                    processed_test
+                )
+
+                prediction = artifact[
+                    "encoder"
+                ].inverse_transform(
+                    encoded_prediction
+                )
+
+            # ------------------------------------------------
+            # XGBOOST + RANDOM FOREST HYBRID
+            # ------------------------------------------------
+
+            else:
+
+                xgb_prob = artifact[
+                    "xgb_model"
+                ].predict_proba(
+                    processed_test
+                )
+
+                rf_prob = artifact[
+                    "rf_model"
+                ].predict_proba(
+                    processed_test
+                )
+
+                xgb_weight = artifact[
+                    "weights"
+                ]["xgb_weight"]
+
+                rf_weight = artifact[
+                    "weights"
+                ]["rf_weight"]
+
+                hybrid_prob = (
+                    xgb_weight * xgb_prob
+                    +
+                    rf_weight * rf_prob
+                )
+
+                hybrid_prediction_encoded = (
+                    hybrid_prob.argmax(
+                        axis=1
+                    )
+                )
+
+                prediction = artifact[
+                    "encoder"
+                ].inverse_transform(
+                    hybrid_prediction_encoded
+                )
+
+            # ------------------------------------------------
+            # TEST RESULTS
+            # ------------------------------------------------
 
             results.append({
                 "Model": name,
-                "Accuracy": accuracy_score(y_test, prediction),
-                "F1 Score": f1_score(y_test, prediction, average="weighted", zero_division=0),
-                "Precision": precision_score(y_test, prediction, average="weighted", zero_division=0),
-                "Recall": recall_score(y_test, prediction, average="weighted", zero_division=0)
-            })
-        except Exception as e:
-            st.warning(f"{name} could not be evaluated: {e}")
 
-    comparison_df = pd.DataFrame(results)
+                "Accuracy": accuracy_score(
+                    y_test,
+                    prediction
+                ),
+
+                "F1 Score": f1_score(
+                    y_test,
+                    prediction,
+                    average="weighted",
+                    zero_division=0
+                ),
+
+                "Precision": precision_score(
+                    y_test,
+                    prediction,
+                    average="weighted",
+                    zero_division=0
+                ),
+
+                "Recall": recall_score(
+                    y_test,
+                    prediction,
+                    average="weighted",
+                    zero_division=0
+                )
+            })
+
+        except Exception as e:
+
+            st.warning(
+                f"{name} could not be evaluated: {e}"
+            )
+
+    comparison_df = pd.DataFrame(
+        results
+    )
 
     if comparison_df.empty:
-        st.warning("No models could be evaluated.")
+
+        st.warning(
+            "No models could be evaluated."
+        )
+
         st.stop()
 
+    # ========================================================
     # BEST MODEL CARD
-    best_model_row = comparison_df.loc[comparison_df["F1 Score"].idxmax()]
+    # ========================================================
+
+    best_model_row = comparison_df.loc[
+        comparison_df["F1 Score"].idxmax()
+    ]
 
     st.metric(
         label="🏆 Top Performing Model (Highest F1)",
-        value=best_model_row['Model'],
+        value=best_model_row["Model"],
         delta=f"F1: {best_model_row['F1 Score']:.4f}"
     )
 
+    # ========================================================
     # METRICS TABLE
-    st.subheader("📋 Evaluation Metrics Summary")
+    # ========================================================
+
+    st.subheader(
+        "📋 Evaluation Metrics Summary"
+    )
+
     st.dataframe(
         comparison_df.style.format({
             "Accuracy": "{:.4f}",
@@ -214,50 +485,124 @@ if current_view == "Compare Models":
         use_container_width=True
     )
 
+    # ========================================================
     # METRIC COMPARISON CHARTS
-    # Built with plain Altair (no .interactive() call) instead of
-    # st.bar_chart, since st.bar_chart enables scroll-to-zoom / drag-to-pan
-    # by default and Streamlit doesn't expose a flag to turn that off.
-    # A chart only gets pan/zoom in Altair/Vega-Lite once you opt in with
-    # .interactive() or an explicit zoom/pan param binding - leaving both
-    # out keeps the chart static while still showing hover tooltips.
-    st.subheader("📈 Metric Comparison")
+    # ========================================================
 
-    metric_tabs = st.tabs(["Accuracy", "F1 Score", "Precision", "Recall"])
+    st.subheader(
+        "📈 Metric Comparison"
+    )
 
-    models_present = comparison_df["Model"].tolist()
-    ordered_models = [m for m in MODEL_ORDER if m in models_present] + [
-        m for m in models_present if m not in MODEL_ORDER
+    metric_tabs = st.tabs([
+        "Accuracy",
+        "F1 Score",
+        "Precision",
+        "Recall"
+    ])
+
+    models_present = comparison_df[
+        "Model"
+    ].tolist()
+
+    ordered_models = [
+        m
+        for m in MODEL_ORDER
+        if m in models_present
+    ] + [
+        m
+        for m in models_present
+        if m not in MODEL_ORDER
     ]
-    color_domain = ordered_models
-    color_range = [MODEL_COLORS.get(m, DEFAULT_MODEL_COLOR) for m in ordered_models]
 
-    def render_metric_chart(metric_column):
+    color_domain = ordered_models
+
+    color_range = [
+        MODEL_COLORS.get(
+            m,
+            DEFAULT_MODEL_COLOR
+        )
+        for m in ordered_models
+    ]
+
+    def render_metric_chart(
+        metric_column
+    ):
+
         chart = (
-            alt.Chart(comparison_df)
-            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+            alt.Chart(
+                comparison_df
+            )
+            .mark_bar(
+                cornerRadiusTopLeft=4,
+                cornerRadiusTopRight=4
+            )
             .encode(
-                x=alt.X("Model:N", title=None, sort=ordered_models),
-                y=alt.Y(f"{metric_column}:Q", title=metric_column, scale=alt.Scale(domain=[0, 1])),
+
+                x=alt.X(
+                    "Model:N",
+                    title=None,
+                    sort=ordered_models
+                ),
+
+                y=alt.Y(
+                    f"{metric_column}:Q",
+                    title=metric_column,
+                    scale=alt.Scale(
+                        domain=[0, 1]
+                    )
+                ),
+
                 color=alt.Color(
                     "Model:N",
-                    scale=alt.Scale(domain=color_domain, range=color_range),
-                    legend=None,
+                    scale=alt.Scale(
+                        domain=color_domain,
+                        range=color_range
+                    ),
+                    legend=None
                 ),
-                tooltip=["Model", alt.Tooltip(f"{metric_column}:Q", format=".4f")],
+
+                tooltip=[
+                    "Model",
+
+                    alt.Tooltip(
+                        f"{metric_column}:Q",
+                        format=".4f"
+                    )
+                ]
             )
-            .properties(height=320)
+            .properties(
+                height=320
+            )
         )
-        st.altair_chart(chart, use_container_width=True)
+
+        st.altair_chart(
+            chart,
+            use_container_width=True
+        )
 
     with metric_tabs[0]:
-        render_metric_chart("Accuracy")
+
+        render_metric_chart(
+            "Accuracy"
+        )
+
     with metric_tabs[1]:
-        render_metric_chart("F1 Score")
+
+        render_metric_chart(
+            "F1 Score"
+        )
+
     with metric_tabs[2]:
-        render_metric_chart("Precision")
+
+        render_metric_chart(
+            "Precision"
+        )
+
     with metric_tabs[3]:
-        render_metric_chart("Recall")
+
+        render_metric_chart(
+            "Recall"
+        )
 
     st.stop()
 
@@ -270,39 +615,151 @@ model_name = st.sidebar.selectbox(
     list(artifacts.keys())
 )
 
-selected_model = artifacts[model_name]["model"]
-selected_preprocessor = artifacts[model_name]["preprocessor"]
-selected_encoder = artifacts[model_name]["encoder"]
+selected_artifact = artifacts[
+    model_name
+]
 
-st.sidebar.success(f"Active Model: {model_name}")
+selected_preprocessor = selected_artifact[
+    "preprocessor"
+]
+
+selected_encoder = selected_artifact[
+    "encoder"
+]
+
+st.sidebar.success(
+    f"Active Model: {model_name}"
+)
 
 # ============================================================
 # INPUT
 # ============================================================
 
-st.header("📝 Student Performance Information")
+st.header(
+    "📝 Student Performance Information"
+)
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    department = st.selectbox("Department", ["CS", "Engineering", "Business", "Mathematics"])
-    attendance = st.number_input("Attendance (%)", 0.0, 100.0, 80.0, 0.1)
-    midterm = st.number_input("Midterm Score", 0.0, 100.0, 70.0, 0.1)
-    final_score = st.number_input("Final Score", 0.0, 100.0, 70.0, 0.1)
-    assignments = st.number_input("Assignments Average", 0.0, 100.0, 70.0, 0.1)
+
+    department = st.selectbox(
+        "Department",
+        [
+            "CS",
+            "Engineering",
+            "Business",
+            "Mathematics"
+        ]
+    )
+
+    attendance = st.number_input(
+        "Attendance (%)",
+        0.0,
+        100.0,
+        80.0,
+        0.1
+    )
+
+    midterm = st.number_input(
+        "Midterm Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    final_score = st.number_input(
+        "Final Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    assignments = st.number_input(
+        "Assignments Average",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
 
 with col2:
-    quizzes = st.number_input("Quizzes Average", 0.0, 100.0, 70.0, 0.1)
-    participation = st.number_input("Participation Score", 0.0, 100.0, 70.0, 0.1)
-    projects = st.number_input("Projects Score", 0.0, 100.0, 70.0, 0.1)
-    study_hours = st.number_input("Study Hours per Week", 0.0, 100.0, 10.0, 0.5)
-    extracurricular = st.selectbox("Extracurricular Activities", ["Yes", "No"])
+
+    quizzes = st.number_input(
+        "Quizzes Average",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    participation = st.number_input(
+        "Participation Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    projects = st.number_input(
+        "Projects Score",
+        0.0,
+        100.0,
+        70.0,
+        0.1
+    )
+
+    study_hours = st.number_input(
+        "Study Hours per Week",
+        0.0,
+        100.0,
+        10.0,
+        0.5
+    )
+
+    extracurricular = st.selectbox(
+        "Extracurricular Activities",
+        [
+            "Yes",
+            "No"
+        ]
+    )
 
 with col3:
-    internet = st.selectbox("Internet Access at Home", ["Yes", "No"])
-    family_income = st.selectbox("Family Income Level", ["Low", "Medium", "High"])
-    stress = st.slider("Stress Level (1-10)", 1, 10, 5)
-    sleep = st.number_input("Sleep Hours per Night", 0.0, 24.0, 7.0, 0.1)
+
+    internet = st.selectbox(
+        "Internet Access at Home",
+        [
+            "Yes",
+            "No"
+        ]
+    )
+
+    family_income = st.selectbox(
+        "Family Income Level",
+        [
+            "Low",
+            "Medium",
+            "High"
+        ]
+    )
+
+    stress = st.slider(
+        "Stress Level (1-10)",
+        1,
+        10,
+        5
+    )
+
+    sleep = st.number_input(
+        "Sleep Hours per Night",
+        0.0,
+        24.0,
+        7.0,
+        0.1
+    )
 
 # ============================================================
 # PREDICT BUTTON
@@ -323,168 +780,498 @@ predict_button = st.button(
 if predict_button:
 
     input_data = pd.DataFrame([{
+
         "Department": department,
+
         "Attendance (%)": attendance,
+
         "Midterm_Score": midterm,
+
         "Final_Score": final_score,
+
         "Assignments_Avg": assignments,
+
         "Quizzes_Avg": quizzes,
+
         "Participation_Score": participation,
+
         "Projects_Score": projects,
+
         "Study_Hours_per_Week": study_hours,
+
         "Extracurricular_Activities": extracurricular,
+
         "Internet_Access_at_Home": internet,
+
         "Family_Income_Level": family_income,
+
         "Stress_Level (1-10)": stress,
+
         "Sleep_Hours_per_Night": sleep
+
     }])
 
+    # ========================================================
     # CHECK INPUT COLUMNS
+    # ========================================================
+
     try:
-        processed_input = selected_preprocessor.transform(input_data)
+
+        processed_input = selected_preprocessor.transform(
+            input_data
+        )
+
     except Exception as e:
-        st.error("❌ Error preprocessing input.")
+
+        st.error(
+            "❌ Error preprocessing input."
+        )
+
         st.exception(e)
-        st.write("Input columns:")
-        st.write(input_data.columns.tolist())
+
+        st.write(
+            "Input columns:"
+        )
+
+        st.write(
+            input_data.columns.tolist()
+        )
+
         st.stop()
 
+    # ========================================================
     # PREDICT
+    # ========================================================
+
     try:
-        prediction_encoded = selected_model.predict(processed_input)
-        predicted_grade = selected_encoder.inverse_transform(prediction_encoded)[0]
+
+        # ----------------------------------------------------
+        # ANN / SVM
+        # ----------------------------------------------------
+
+        if selected_artifact["type"] == "single":
+
+            prediction_encoded = selected_artifact[
+                "model"
+            ].predict(
+                processed_input
+            )
+
+            predicted_grade = selected_artifact[
+                "encoder"
+            ].inverse_transform(
+                prediction_encoded
+            )[0]
+
+        # ----------------------------------------------------
+        # XGBOOST + RANDOM FOREST HYBRID
+        # ----------------------------------------------------
+
+        else:
+
+            xgb_prob = selected_artifact[
+                "xgb_model"
+            ].predict_proba(
+                processed_input
+            )[0]
+
+            rf_prob = selected_artifact[
+                "rf_model"
+            ].predict_proba(
+                processed_input
+            )[0]
+
+            xgb_weight = selected_artifact[
+                "weights"
+            ]["xgb_weight"]
+
+            rf_weight = selected_artifact[
+                "weights"
+            ]["rf_weight"]
+
+            hybrid_probabilities = (
+                xgb_weight * xgb_prob
+                +
+                rf_weight * rf_prob
+            )
+
+            prediction_encoded = [
+                hybrid_probabilities.argmax()
+            ]
+
+            predicted_grade = selected_artifact[
+                "encoder"
+            ].inverse_transform(
+                prediction_encoded
+            )[0]
+
     except Exception as e:
-        st.error("❌ Prediction failed.")
+
+        st.error(
+            "❌ Prediction failed."
+        )
+
         st.exception(e)
+
         st.stop()
 
-    # Build a probability table up front (used by both the card and the chart)
+    # ========================================================
+    # BUILD PROBABILITY TABLE
+    # ========================================================
+
     probability_df = None
     top_confidence = None
 
-    if hasattr(selected_model, "predict_proba"):
-        try:
-            probabilities = selected_model.predict_proba(processed_input)[0]
-            class_names = selected_encoder.classes_
+    try:
 
-            probability_df = pd.DataFrame({
-                "Grade": class_names,
-                "Probability": probabilities
-            }).sort_values("Probability", ascending=False).reset_index(drop=True)
+        # ----------------------------------------------------
+        # ANN / SVM
+        # ----------------------------------------------------
 
-            top_confidence = probability_df.loc[
-                probability_df["Grade"] == predicted_grade, "Probability"
-            ].iloc[0]
-        except Exception as e:
-            st.warning(f"Confidence display unavailable: {e}")
+        if selected_artifact["type"] == "single":
 
-    # ========================================================
-    # RESULT CARD
-    # ========================================================
-    st.markdown("---")
-    st.header("🎯 Prediction Result")
+            if hasattr(
+                selected_artifact["model"],
+                "predict_proba"
+            ):
 
-    style = GRADE_STYLE.get(str(predicted_grade).upper(), DEFAULT_STYLE)
-    confidence_text = f"{top_confidence * 100:.1f}% confidence" if top_confidence is not None else ""
+                probabilities = selected_artifact[
+                    "model"
+                ].predict_proba(
+                    processed_input
+                )[0]
 
-    res_col1, res_col2 = st.columns([1, 2], gap="large")
+        # ----------------------------------------------------
+        # XGBOOST + RANDOM FOREST HYBRID
+        # ----------------------------------------------------
 
-    with res_col1:
-        st.markdown(
-            f"""
-            <div style="
-                border: 1px solid #E5E7EB;
-                border-radius: 12px;
-                padding: 28px 24px;
-                text-align: center;
-                background: linear-gradient(180deg, {style['color']}14 0%, #FFFFFF 65%);
-            ">
-                <div style="font-size: 14px; color: #6B7280; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">
-                    Predicted Grade
-                </div>
-                <div style="
-                    font-size: 72px;
-                    font-weight: 800;
-                    line-height: 1.1;
-                    color: {style['color']};
-                    margin: 8px 0 4px 0;
-                ">
-                    {predicted_grade}
-                </div>
-                <div style="font-size: 15px; color: {style['color']}; font-weight: 600;">
-                    {style['label']}
-                </div>
-                <div style="font-size: 13px; color: #6B7280; margin-top: 10px;">
-                    {confidence_text}
-                </div>
-                <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 16px 0;">
-                <div style="font-size: 12px; color: #9CA3AF;">
-                    Engineered by {model_name}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        else:
+
+            probabilities = hybrid_probabilities
+
+        class_names = selected_encoder.classes_
+
+        probability_df = pd.DataFrame({
+
+            "Grade": class_names,
+
+            "Probability": probabilities
+
+        }).sort_values(
+            "Probability",
+            ascending=False
+        ).reset_index(
+            drop=True
         )
 
+        top_confidence = probability_df.loc[
+            probability_df["Grade"] == predicted_grade,
+            "Probability"
+        ].iloc[0]
+
+    except Exception as e:
+
+        st.warning(
+            f"Confidence display unavailable: {e}"
+        )
+
+    # ========================================================
+    # RESULT
+    # ========================================================
+
+    st.markdown("---")
+
+    st.header(
+        "🎯 Prediction Result"
+    )
+
+    style = GRADE_STYLE.get(
+        str(predicted_grade).upper(),
+        DEFAULT_STYLE
+    )
+
+    # ========================================================
+    # RESULT CARD - NO HTML
+    # ========================================================
+
+    res_col1, res_col2 = st.columns(
+        [1, 2],
+        gap="large"
+    )
+
+    with res_col1:
+
+        st.subheader(
+            "Predicted Grade"
+        )
+
+        if predicted_grade == "A":
+
+            st.success(
+                f"## {predicted_grade}"
+            )
+
+        elif predicted_grade == "B":
+
+            st.info(
+                f"## {predicted_grade}"
+            )
+
+        elif predicted_grade == "C":
+
+            st.warning(
+                f"## {predicted_grade}"
+            )
+
+        elif predicted_grade == "D":
+
+            st.warning(
+                f"## {predicted_grade}"
+            )
+
+        elif predicted_grade == "F":
+
+            st.error(
+                f"## {predicted_grade}"
+            )
+
+        else:
+
+            st.write(
+                f"## {predicted_grade}"
+            )
+
+        if style["label"]:
+
+            st.write(
+                f"**{style['label']}**"
+            )
+
+        if top_confidence is not None:
+
+            st.metric(
+                "Confidence",
+                f"{top_confidence * 100:.1f}%"
+            )
+
+        st.caption(
+            f"Engineered by {model_name}"
+        )
+
+        # Show the hybrid weights only for XGBoost
+        if selected_artifact["type"] == "hybrid":
+
+            st.write(
+                "**Hybrid Model Weights**"
+            )
+
+            st.write(
+                f"XGBoost: "
+                f"{xgb_weight:.1f}"
+            )
+
+            st.write(
+                f"Random Forest: "
+                f"{rf_weight:.1f}"
+            )
+
+    # ========================================================
+    # CLASS CONFIDENCE BREAKDOWN
+    # ========================================================
+
     with res_col2:
-        st.subheader("📊 Class Confidence Breakdown")
+
+        st.subheader(
+            "📊 Class Confidence Breakdown"
+        )
 
         if probability_df is not None:
-            chart_df = probability_df.copy()
-            chart_df["Probability (%)"] = chart_df["Probability"] * 100
-            chart_df["Predicted"] = chart_df["Grade"] == predicted_grade
 
-            grade_order = [g for g in GRADE_STYLE if g in chart_df["Grade"].values] or None
+            chart_df = probability_df.copy()
+
+            chart_df["Probability (%)"] = (
+                chart_df["Probability"] * 100
+            )
+
+            chart_df["Predicted"] = (
+                chart_df["Grade"]
+                == predicted_grade
+            )
+
+            grade_order = [
+                g
+                for g in GRADE_STYLE
+                if g in chart_df["Grade"].values
+            ] or None
 
             confidence_chart = (
-                alt.Chart(chart_df)
-                .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
+
+                alt.Chart(
+                    chart_df
+                )
+
+                .mark_bar(
+                    cornerRadiusTopLeft=4,
+                    cornerRadiusTopRight=4
+                )
+
                 .encode(
-                    x=alt.X("Grade:N", sort=grade_order, title=None),
-                    y=alt.Y("Probability (%):Q", title="Probability (%)", scale=alt.Scale(domain=[0, 100])),
+
+                    x=alt.X(
+                        "Grade:N",
+                        sort=grade_order,
+                        title=None
+                    ),
+
+                    y=alt.Y(
+                        "Probability (%):Q",
+                        title="Probability (%)",
+                        scale=alt.Scale(
+                            domain=[0, 100]
+                        )
+                    ),
+
                     color=alt.condition(
                         alt.datum.Predicted,
                         alt.value(style["color"]),
-                        alt.value("#D1D5DB"),
+                        alt.value("#D1D5DB")
                     ),
-                    tooltip=["Grade", alt.Tooltip("Probability (%):Q", format=".1f")],
+
+                    tooltip=[
+                        "Grade",
+
+                        alt.Tooltip(
+                            "Probability (%):Q",
+                            format=".1f"
+                        )
+                    ]
                 )
             )
 
             labels = (
-                alt.Chart(chart_df)
-                .mark_text(dy=-8, fontWeight="bold")
+
+                alt.Chart(
+                    chart_df
+                )
+
+                .mark_text(
+                    dy=-8,
+                    fontWeight="bold"
+                )
+
                 .encode(
-                    x=alt.X("Grade:N", sort=grade_order),
+
+                    x=alt.X(
+                        "Grade:N",
+                        sort=grade_order
+                    ),
+
                     y="Probability (%):Q",
-                    text=alt.Text("Probability (%):Q", format=".1f"),
+
+                    text=alt.Text(
+                        "Probability (%):Q",
+                        format=".1f"
+                    )
                 )
             )
 
-            st.altair_chart((confidence_chart + labels).properties(height=320), use_container_width=True)
+            st.altair_chart(
+                (
+                    confidence_chart
+                    +
+                    labels
+                ).properties(
+                    height=320
+                ),
+                use_container_width=True
+            )
+
         else:
-            st.info("This model does not expose class probabilities.")
+
+            st.info(
+                "This model does not expose class probabilities."
+            )
 
     # ========================================================
     # STUDENT SUMMARY
     # ========================================================
-    with st.expander("📋 Student Performance Summary", expanded=False):
+
+    with st.expander(
+        "📋 Student Performance Summary",
+        expanded=False
+    ):
+
         summary_col1, summary_col2 = st.columns(2)
 
         with summary_col1:
-            st.write(f"**Department:** {department}")
-            st.write(f"**Attendance:** {attendance:.1f}%")
-            st.write(f"**Midterm Score:** {midterm:.1f}")
-            st.write(f"**Final Score:** {final_score:.1f}")
-            st.write(f"**Assignments:** {assignments:.1f}")
-            st.write(f"**Quizzes:** {quizzes:.1f}")
-            st.write(f"**Participation:** {participation:.1f}")
+
+            st.write(
+                f"**Department:** {department}"
+            )
+
+            st.write(
+                f"**Attendance:** "
+                f"{attendance:.1f}%"
+            )
+
+            st.write(
+                f"**Midterm Score:** "
+                f"{midterm:.1f}"
+            )
+
+            st.write(
+                f"**Final Score:** "
+                f"{final_score:.1f}"
+            )
+
+            st.write(
+                f"**Assignments:** "
+                f"{assignments:.1f}"
+            )
+
+            st.write(
+                f"**Quizzes:** "
+                f"{quizzes:.1f}"
+            )
+
+            st.write(
+                f"**Participation:** "
+                f"{participation:.1f}"
+            )
 
         with summary_col2:
-            st.write(f"**Projects:** {projects:.1f}")
-            st.write(f"**Study Hours:** {study_hours:.1f} hours/week")
-            st.write(f"**Extracurricular:** {extracurricular}")
-            st.write(f"**Internet Access:** {internet}")
-            st.write(f"**Family Income:** {family_income}")
-            st.write(f"**Stress Level:** {stress}/10")
-            st.write(f"**Sleep:** {sleep:.1f} hours/night")
+
+            st.write(
+                f"**Projects:** "
+                f"{projects:.1f}"
+            )
+
+            st.write(
+                f"**Study Hours:** "
+                f"{study_hours:.1f} hours/week"
+            )
+
+            st.write(
+                f"**Extracurricular:** "
+                f"{extracurricular}"
+            )
+
+            st.write(
+                f"**Internet Access:** "
+                f"{internet}"
+            )
+
+            st.write(
+                f"**Family Income:** "
+                f"{family_income}"
+            )
+
+            st.write(
+                f"**Stress Level:** "
+                f"{stress}/10"
+            )
+
+            st.write(
+                f"**Sleep:** "
+                f"{sleep:.1f} hours/night"
+            )
