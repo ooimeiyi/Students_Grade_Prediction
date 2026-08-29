@@ -654,7 +654,7 @@ if predict_button:
             st.metric("Confidence", f"{top_confidence * 100:.1f}%")
 
         # Display selected model
-        st.caption(f"Engineered by {model_name}")
+        st.caption(f"{model_name}")
 
 
     # --------------------------------------------------------
