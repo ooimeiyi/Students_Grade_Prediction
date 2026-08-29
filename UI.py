@@ -403,7 +403,19 @@ if current_view == "Compare Models":
         value=best_model_row["Model"],
         delta=f"Accuracy: {best_model_row['Accuracy']:.4f}"
     )
+    
+    # Arrange models in fixed order
+    model_order = ["ANN", "SVM", "XGBoost"]
 
+    comparison_df["Model"] = pd.Categorical(
+        comparison_df["Model"],
+        categories=model_order,
+        ordered=True
+    )
+
+    comparison_df = comparison_df.sort_values("Model").reset_index(drop=True)
+    
+    comparison_df.index = range(1, len(comparison_df) + 1)
 
     # Display metrics
     st.subheader("📋 Evaluation Metrics Summary")
@@ -755,7 +767,7 @@ if predict_button:
             st.metric("Confidence", f"{top_confidence * 100:.1f}%")
 
         # Display selected model
-        st.caption(f"Engineered by {model_name}")
+        st.caption(f"{model_name}")
 
 
     # --------------------------------------------------------
@@ -786,7 +798,12 @@ if predict_button:
                 alt.Chart(chart_df)
                 .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                 .encode(
-                    x=alt.X("Grade:N", sort=grade_order, title=None),
+                    x=alt.X(
+                        "Grade:N",
+                        sort=grade_order,
+                        title=None,
+                        axis=alt.Axis(labelAngle=0)
+                    ),
                     y=alt.Y(
                         "Probability (%):Q",
                         title="Probability (%)",
@@ -810,7 +827,7 @@ if predict_button:
                 alt.Chart(chart_df)
                 .mark_text(dy=-8, fontWeight="bold", color="#FFFFFF")
                 .encode(
-                    x=alt.X("Grade:N", sort=grade_order),
+                    x=alt.X("Grade:N", sort=grade_order, axis=alt.Axis(labelAngle=90)),
                     y="Probability (%):Q",
                     text=alt.Text("Probability (%):Q", format=".1f")
                 )
