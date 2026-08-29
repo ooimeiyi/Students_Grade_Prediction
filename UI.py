@@ -88,6 +88,9 @@ ENCODER_FILES = {
 HYBRID_RF_FILE = "random_forest_grade_model.pkl"
 HYBRID_WEIGHT_FILE = "hybrid_weights.joblib"
 
+# SVM Hybrid model files
+SVM_HYBRID_LR_FILE = "logistic_regression_grade_model.pkl"
+SVM_HYBRID_WEIGHT_FILE = "svm_lr_hybrid_weights.joblib"
 
 # ============================================================
 # LOAD TRAINED MODELS AND ARTIFACTS
@@ -146,33 +149,85 @@ def load_artifacts():
         except Exception as e:
             errors["XGBoost"] = [str(e)]
 
-    # Load ANN and SVM
-    for model_name in ["ANN", "SVM"]:
-
+    # ------------------------------------------------------
+    # SVM + Logistic Regression hybrid
+    # ------------------------------------------------------
+ 
+    svm_model_path = os.path.join(ARTIFACTS_DIR, MODEL_FILES["SVM"])
+    svm_preprocessor_path = os.path.join(ARTIFACTS_DIR, PREPROCESSOR_FILES["SVM"])
+    svm_encoder_path = os.path.join(ARTIFACTS_DIR, ENCODER_FILES["SVM"])
+    lr_model_path = os.path.join(ARTIFACTS_DIR, SVM_HYBRID_LR_FILE)
+    svm_hybrid_weight_path = os.path.join(ARTIFACTS_DIR, SVM_HYBRID_WEIGHT_FILE)
+ 
+    # Check missing SVM files
+    svm_missing = []
+ 
+    if not os.path.exists(svm_model_path):
+        svm_missing.append(MODEL_FILES["SVM"])
+ 
+    if not os.path.exists(svm_preprocessor_path):
+        svm_missing.append(PREPROCESSOR_FILES["SVM"])
+ 
+    if not os.path.exists(svm_encoder_path):
+        svm_missing.append(ENCODER_FILES["SVM"])
+ 
+    if not os.path.exists(lr_model_path):
+        svm_missing.append(SVM_HYBRID_LR_FILE)
+ 
+    if not os.path.exists(svm_hybrid_weight_path):
+        svm_missing.append(SVM_HYBRID_WEIGHT_FILE)
+ 
+    # Record missing SVM files
+    if svm_missing:
+        errors["SVM"] = svm_missing
+ 
+    else:
+ 
+        try:
+ 
+            # Load SVM hybrid artifacts
+            artifacts["SVM"] = {
+                "type": "hybrid",
+                "svm_model": joblib.load(svm_model_path),
+                "lr_model": joblib.load(lr_model_path),
+                "preprocessor": joblib.load(svm_preprocessor_path),
+                "encoder": joblib.load(svm_encoder_path),
+                "weights": joblib.load(svm_hybrid_weight_path)
+            }
+ 
+        except Exception as e:
+            errors["SVM"] = [str(e)]
+ 
+    # ------------------------------------------------------
+    # ANN (single model, unchanged)
+    # ------------------------------------------------------
+ 
+    for model_name in ["ANN"]:
+ 
         # Build artifact paths
         model_path = os.path.join(ARTIFACTS_DIR, MODEL_FILES[model_name])
         preprocessor_path = os.path.join(ARTIFACTS_DIR, PREPROCESSOR_FILES[model_name])
         encoder_path = os.path.join(ARTIFACTS_DIR, ENCODER_FILES[model_name])
-
+ 
         # Check missing files
         missing = []
-
+ 
         if not os.path.exists(model_path):
             missing.append(MODEL_FILES[model_name])
-
+ 
         if not os.path.exists(preprocessor_path):
             missing.append(PREPROCESSOR_FILES[model_name])
-
+ 
         if not os.path.exists(encoder_path):
             missing.append(ENCODER_FILES[model_name])
-
+ 
         # Skip model if files are missing
         if missing:
             errors[model_name] = missing
             continue
-
+ 
         try:
-
+ 
             # Load model artifacts
             artifacts[model_name] = {
                 "type": "single",
@@ -180,13 +235,12 @@ def load_artifacts():
                 "preprocessor": joblib.load(preprocessor_path),
                 "encoder": joblib.load(encoder_path)
             }
-
+ 
         except Exception as e:
             errors[model_name] = [str(e)]
-
+ 
     # Return loaded artifacts and errors
     return artifacts, errors
-
 
 # Load all artifacts
 artifacts, artifact_errors = load_artifacts()
@@ -269,17 +323,50 @@ if current_view == "Compare Models":
                 encoded_prediction = artifact["model"].predict(processed_test)
                 prediction = artifact["encoder"].inverse_transform(encoded_prediction)
 
-            # Hybrid prediction
+            # Hybrid prediction (works for XGB+RF, SVM+LR, or any future
+            # two-model hybrid, without hardcoding component names).
+            #
+            # Each hybrid artifact stores its component models under keys
+            # ending in "_model" (e.g. "xgb_model"/"rf_model" or
+            # "svm_model"/"lr_model"), and matching weights under
+            # "<prefix>_weight" inside artifact["weights"]. This block
+            # discovers those keys instead of assuming XGB/RF specifically.
             else:
 
-                xgb_prob = artifact["xgb_model"].predict_proba(processed_test)
-                rf_prob = artifact["rf_model"].predict_proba(processed_test)
+                model_keys = sorted(
+                    key for key in artifact
+                    if key.endswith("_model")
+                )
 
-                xgb_weight = artifact["weights"]["xgb_weight"]
-                rf_weight = artifact["weights"]["rf_weight"]
+                if len(model_keys) != 2:
+                    raise ValueError(
+                        f"Expected 2 component models for a hybrid, "
+                        f"found {len(model_keys)}: {model_keys}"
+                    )
 
-                # Combine probabilities
-                hybrid_prob = xgb_weight * xgb_prob + rf_weight * rf_prob
+                hybrid_prob = None
+
+                for model_key in model_keys:
+
+                    prefix = model_key[: -len("_model")]
+                    weight_key = f"{prefix}_weight"
+
+                    if weight_key not in artifact["weights"]:
+                        raise KeyError(
+                            f"Missing '{weight_key}' in weights for "
+                            f"'{model_key}'."
+                        )
+
+                    component_prob = artifact[model_key].predict_proba(processed_test)
+                    component_weight = artifact["weights"][weight_key]
+
+                    weighted_prob = component_weight * component_prob
+
+                    hybrid_prob = (
+                        weighted_prob
+                        if hybrid_prob is None
+                        else hybrid_prob + weighted_prob
+                    )
 
                 # Select highest probability class
                 hybrid_prediction_encoded = hybrid_prob.argmax(axis=1)
@@ -331,7 +418,6 @@ if current_view == "Compare Models":
         use_container_width=True
     )
 
-
     # ========================================================
     # METRIC COMPARISON CHARTS
     # ========================================================
@@ -354,7 +440,6 @@ if current_view == "Compare Models":
     color_domain = ordered_models
 
     color_range = [MODEL_COLORS.get(m, DEFAULT_MODEL_COLOR) for m in ordered_models]
-
 
     # Create metric chart
     def render_metric_chart(metric_column):
@@ -526,17 +611,46 @@ if predict_button:
             prediction_encoded = selected_artifact["model"].predict(processed_input)
             predicted_grade = selected_artifact["encoder"].inverse_transform(prediction_encoded)[0]
 
-        # Hybrid prediction
+        # Hybrid prediction (works for XGB+RF, SVM+LR, or any future
+        # two-model hybrid — discovers component models by their
+        # "<prefix>_model" keys instead of assuming XGB/RF specifically,
+        # matching the same logic used on the Model Comparison page).
         else:
 
-            xgb_prob = selected_artifact["xgb_model"].predict_proba(processed_input)[0]
-            rf_prob = selected_artifact["rf_model"].predict_proba(processed_input)[0]
+            model_keys = sorted(
+                key for key in selected_artifact
+                if key.endswith("_model")
+            )
 
-            xgb_weight = selected_artifact["weights"]["xgb_weight"]
-            rf_weight = selected_artifact["weights"]["rf_weight"]
+            if len(model_keys) != 2:
+                raise ValueError(
+                    f"Expected 2 component models for a hybrid, "
+                    f"found {len(model_keys)}: {model_keys}"
+                )
 
-            # Combine model probabilities
-            hybrid_probabilities = xgb_weight * xgb_prob + rf_weight * rf_prob
+            hybrid_probabilities = None
+
+            for model_key in model_keys:
+
+                prefix = model_key[: -len("_model")]
+                weight_key = f"{prefix}_weight"
+
+                if weight_key not in selected_artifact["weights"]:
+                    raise KeyError(
+                        f"Missing '{weight_key}' in weights for "
+                        f"'{model_key}'."
+                    )
+
+                component_prob = selected_artifact[model_key].predict_proba(processed_input)[0]
+                component_weight = selected_artifact["weights"][weight_key]
+
+                weighted_prob = component_weight * component_prob
+
+                hybrid_probabilities = (
+                    weighted_prob
+                    if hybrid_probabilities is None
+                    else hybrid_probabilities + weighted_prob
+                )
 
             # Select highest probability class
             prediction_encoded = [hybrid_probabilities.argmax()]
@@ -548,7 +662,6 @@ if predict_button:
         st.error("❌ Prediction failed.")
         st.exception(e)
         st.stop()
-
 
     # ========================================================
     # CALCULATE CLASS PROBABILITIES / CONFIDENCE
