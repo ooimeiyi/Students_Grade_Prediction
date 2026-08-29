@@ -257,7 +257,7 @@ for fold, (train_idx, valid_idx) in enumerate(weight_cv.split(X_train_processed,
 
 # Test different hybrid weights
 best_weight = 0.5
-best_accurancy = -1
+best_accuracy = -1
 
 print("\nWeight Evaluation")
 print("-" * 45)
