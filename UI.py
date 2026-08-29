@@ -760,7 +760,7 @@ if predict_button:
 
         # Display confidence
         if top_confidence is not None:
-            st.metric("Confidence", f"{top_confidence * 100:.1f}%")
+            st.metric("Predicted Confidence", f"{top_confidence * 100:.1f}%")
 
         # Display selected model
         st.caption(f"{model_name}")
