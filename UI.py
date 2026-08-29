@@ -623,10 +623,6 @@ if predict_button:
             prediction_encoded = selected_artifact["model"].predict(processed_input)
             predicted_grade = selected_artifact["encoder"].inverse_transform(prediction_encoded)[0]
 
-        # Hybrid prediction (works for XGB+RF, SVM+LR, or any future
-        # two-model hybrid — discovers component models by their
-        # "<prefix>_model" keys instead of assuming XGB/RF specifically,
-        # matching the same logic used on the Model Comparison page).
         else:
 
             model_keys = sorted(
