@@ -276,7 +276,7 @@ for fold, (train_idx, valid_idx) in enumerate(weight_cv.split(X_train_processed,
 
 
 best_weight = 0.5
-best_f1 = -1
+best_accuracy = -1
 
 print("\nWeight Evaluation")
 print("-" * 45)
@@ -298,14 +298,14 @@ for svm_weight in [0.5, 0.6, 0.7, 0.8, 0.9]:
         f"{hybrid_oof_result['F1']:>10.4f}"
     )
 
-    if hybrid_oof_result["F1"] > best_f1:
-        best_f1 = hybrid_oof_result["F1"]
+    if hybrid_oof_result["Accuracy"] > best_accuracy:
+        best_accuracy = hybrid_oof_result["Accuracy"]
         best_weight = svm_weight
 
 lr_weight = 1 - best_weight
 
 print(f"\nSelected weights: SVM={best_weight:.1f}, Logistic Regression={lr_weight:.1f}")
-print(f"Best Hybrid CV F1: {best_f1:.4f}")
+print(f"Best Hybrid Accuracy: {best_accuracy:.4f}")
 
 
 # ============================================================
