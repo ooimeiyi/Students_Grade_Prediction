@@ -685,7 +685,12 @@ if predict_button:
                 alt.Chart(chart_df)
                 .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
                 .encode(
-                    x=alt.X("Grade:N", sort=grade_order, title=None),
+                    x=alt.X(
+                        "Grade:N",
+                        sort=grade_order,
+                        title=None,
+                        axis=alt.Axis(labelAngle=0)
+                    ),
                     y=alt.Y(
                         "Probability (%):Q",
                         title="Probability (%)",
@@ -709,7 +714,7 @@ if predict_button:
                 alt.Chart(chart_df)
                 .mark_text(dy=-8, fontWeight="bold", color="#FFFFFF")
                 .encode(
-                    x=alt.X("Grade:N", sort=grade_order),
+                    x=alt.X("Grade:N", sort=grade_order, axis=alt.Axis(labelAngle=90)),
                     y="Probability (%):Q",
                     text=alt.Text("Probability (%):Q", format=".1f")
                 )
