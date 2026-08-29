@@ -316,7 +316,19 @@ if current_view == "Compare Models":
         value=best_model_row["Model"],
         delta=f"Accuracy: {best_model_row['Accuracy']:.4f}"
     )
+    
+    # Arrange models in fixed order
+    model_order = ["ANN", "SVM", "XGBoost"]
 
+    comparison_df["Model"] = pd.Categorical(
+        comparison_df["Model"],
+        categories=model_order,
+        ordered=True
+    )
+
+    comparison_df = comparison_df.sort_values("Model").reset_index(drop=True)
+    
+    comparison_df.index = range(1, len(comparison_df) + 1)
 
     # Display metrics
     st.subheader("📋 Evaluation Metrics Summary")
