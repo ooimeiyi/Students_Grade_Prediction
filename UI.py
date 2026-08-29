@@ -308,13 +308,13 @@ if current_view == "Compare Models":
 
 
     # Find best model
-    best_model_row = comparison_df.loc[comparison_df["F1 Score"].idxmax()]
+    best_model_row = comparison_df.loc[comparison_df["Accuracy"].idxmax()]
 
     # Display best model
     st.metric(
-        label="🏆 Top Performing Model (Highest F1)",
+        label="🏆 Top Performing Model (Highest Accuracy)",
         value=best_model_row["Model"],
-        delta=f"F1: {best_model_row['F1 Score']:.4f}"
+        delta=f"Accuracy: {best_model_row['Accuracy']:.4f}"
     )
 
 

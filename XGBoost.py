@@ -164,7 +164,7 @@ search = RandomizedSearchCV(
     estimator=xgb_tuning,
     param_distributions=param_grid,
     n_iter=50,
-    scoring="f1_weighted",
+    scoring="accuracy",
     cv=cv,
     random_state=42,
     n_jobs=-1,
@@ -178,8 +178,8 @@ xgb_pred = xgb_model.predict(X_test_processed)
 xgb_prob = xgb_model.predict_proba(X_test_processed)
 xgb_result = evaluate(y_test, xgb_pred)
 
-print(f"Best CV F1      : {search.best_score_:.4f}")
-print(f"Best parameters : {search.best_params_}")
+print(f"Best CV Accuracy : {search.best_score_:.4f}")
+print(f"Best parameters  : {search.best_params_}")
 
 
 print("\nXGBoost Tuning Results")
@@ -239,7 +239,7 @@ for fold, (train_idx, valid_idx) in enumerate(weight_cv.split(X_train_processed,
 
 
 best_weight = 0.5
-best_f1 = -1
+best_accurancy = -1
 
 print("\nWeight Evaluation")
 print("-" * 45)
@@ -260,14 +260,14 @@ for xgb_weight in [0.5, 0.6, 0.7, 0.8, 0.9]:
         f"{hybrid_oof_result['F1']:>10.4f}"
     )
 
-    if hybrid_oof_result["F1"] > best_f1:
-        best_f1 = hybrid_oof_result["F1"]
+    if hybrid_oof_result["Accuracy"] > best_accurancy:
+        best_accurancy = hybrid_oof_result["Accuracy"]
         best_weight = xgb_weight
 
 rf_weight = 1 - best_weight
 
 print(f"\nSelected weights: XGBoost={best_weight:.1f}, Random Forest={rf_weight:.1f}")
-print(f"Best Hybrid CV F1: {best_f1:.4f}")
+print(f"Best Hybrid CV Accuracy: {best_accurancy:.4f}")
 
 
 print("\n" + "-" * 55)
