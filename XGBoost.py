@@ -14,9 +14,11 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from sklearn.base import clone
 from xgboost import XGBClassifier
 
+# Ignore warning messages
 warnings.filterwarnings("ignore")
 
 
+# Project settings
 ARTIFACTS_DIR = "artifacts"
 TARGET = "Grade"
 
@@ -28,6 +30,7 @@ print("XGBoost + Random Forest Grade Prediction")
 print("=" * 55)
 
 
+# Load training and testing data
 X_train = pd.read_csv(os.path.join(ARTIFACTS_DIR, "X_train_raw.csv"))
 X_test = pd.read_csv(os.path.join(ARTIFACTS_DIR, "X_test_raw.csv"))
 y_train_raw = pd.read_csv(os.path.join(ARTIFACTS_DIR, "y_train.csv"))[TARGET]
@@ -37,6 +40,7 @@ print(f"Training samples : {len(X_train)}")
 print(f"Testing samples  : {len(X_test)}")
 
 
+# Load and apply feature column order
 feature_path = os.path.join(ARTIFACTS_DIR, "feature_columns.joblib")
 
 if os.path.exists(feature_path):
@@ -47,6 +51,7 @@ else:
     feature_columns = X_train.columns.tolist()
 
 
+# Check dataset columns
 if TARGET in X_train.columns:
     raise ValueError("Grade exists inside X_train.")
 
@@ -57,6 +62,7 @@ if list(X_train.columns) != list(X_test.columns):
     raise ValueError("X_train and X_test columns do not match.")
 
 
+# Encode Grade labels into numbers
 label_encoder = LabelEncoder()
 y_train = label_encoder.fit_transform(y_train_raw)
 y_test = label_encoder.transform(y_test_raw)
@@ -65,10 +71,12 @@ num_classes = len(label_encoder.classes_)
 print(f"Grade classes    : {list(label_encoder.classes_)}")
 
 
+# Identify numerical and categorical features
 numeric_features = X_train.select_dtypes(include=["int64", "float64"]).columns.tolist()
 categorical_features = X_train.select_dtypes(include=["object", "category", "bool", "string"]).columns.tolist()
 
 
+# Preprocessing pipeline for missing values and categorical data
 preprocessor = ColumnTransformer(transformers=[
     (
         "num",
@@ -93,6 +101,7 @@ X_test_processed = preprocessor.transform(X_test)
 print(f"Processed shape  : train={X_train_processed.shape}, test={X_test_processed.shape}")
 
 
+# Evaluation metrics
 def evaluate(y_true, y_pred):
     return {
         "Accuracy": accuracy_score(y_true, y_pred),
@@ -102,6 +111,7 @@ def evaluate(y_true, y_pred):
     }
 
 
+# 1. XGBoost baseline
 print("\n" + "-" * 55)
 print("1. XGBoost Baseline")
 print("-" * 55)
@@ -134,6 +144,7 @@ print(f"Precision: {baseline_result['Precision']:.4f}")
 print(f"Recall   : {baseline_result['Recall']:.4f}")
 
 
+# 2. XGBoost hyperparameter tuning
 print("\n" + "-" * 55)
 print("2. Fine-tuning XGBoost")
 print("-" * 55)
@@ -158,6 +169,7 @@ xgb_tuning = XGBClassifier(
     n_jobs=-1
 )
 
+# Use stratified cross-validation for tuning
 cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
 
 search = RandomizedSearchCV(
@@ -173,6 +185,7 @@ search = RandomizedSearchCV(
 
 search.fit(X_train_processed, y_train)
 
+# Get the best tuned model
 xgb_model = search.best_estimator_
 xgb_pred = xgb_model.predict(X_test_processed)
 xgb_prob = xgb_model.predict_proba(X_test_processed)
@@ -182,6 +195,7 @@ print(f"Best CV Accuracy : {search.best_score_:.4f}")
 print(f"Best parameters  : {search.best_params_}")
 
 
+# Compare baseline and tuned XGBoost
 print("\nXGBoost Tuning Results")
 print("-" * 55)
 print(f"{'Metric':<12}{'Before':>12}{'After':>12}{'Change':>12}")
@@ -193,6 +207,7 @@ for metric in ["Accuracy", "F1", "Precision", "Recall"]:
     print(f"{metric:<12}{before:>12.4f}{after:>12.4f}{after - before:>+12.4f}")
 
 
+# 3. Random Forest
 print("\n" + "-" * 55)
 print("3. Random Forest")
 print("-" * 55)
@@ -216,6 +231,7 @@ print(f"Precision: {rf_result['Precision']:.4f}")
 print(f"Recall   : {rf_result['Recall']:.4f}")
 
 
+# 4. Find the best XGBoost and Random Forest weight
 print("\n" + "-" * 55)
 print("4. Selecting Hybrid Weight")
 print("-" * 55)
@@ -227,6 +243,7 @@ rf_oof_prob = np.zeros((len(X_train_processed), num_classes))
 
 for fold, (train_idx, valid_idx) in enumerate(weight_cv.split(X_train_processed, y_train), start=1):
 
+    # Generate out-of-fold probabilities
     xgb_fold = clone(xgb_model)
     xgb_fold.fit(X_train_processed[train_idx], y_train[train_idx])
     xgb_oof_prob[valid_idx] = xgb_fold.predict_proba(X_train_processed[valid_idx])
@@ -238,6 +255,7 @@ for fold, (train_idx, valid_idx) in enumerate(weight_cv.split(X_train_processed,
     print(f"Fold {fold}/3 completed")
 
 
+# Test different hybrid weights
 best_weight = 0.5
 best_accurancy = -1
 
@@ -270,15 +288,18 @@ print(f"\nSelected weights: XGBoost={best_weight:.1f}, Random Forest={rf_weight:
 print(f"Best Hybrid CV Accuracy: {best_accurancy:.4f}")
 
 
+# 5. Final hybrid model
 print("\n" + "-" * 55)
 print("5. Final Hybrid Model")
 print("-" * 55)
 
+# Combine model probabilities using the selected weights
 final_prob = best_weight * xgb_prob + rf_weight * rf_prob
 final_pred = final_prob.argmax(axis=1)
 hybrid_result = evaluate(y_test, final_pred)
 
 
+# Display final model comparison
 print("\nFinal Model Results")
 print("-" * 68)
 print(f"{'Model':<20}{'Accuracy':>12}{'F1':>12}{'Precision':>12}{'Recall':>12}")
@@ -301,6 +322,7 @@ print("-" * 68)
 print(f"Hybrid weights: XGBoost={best_weight:.1f}, Random Forest={rf_weight:.1f}")
 
 
+# Save trained models and preprocessing artifacts
 joblib.dump(xgb_model, os.path.join(ARTIFACTS_DIR, "xgboost_grade_model.pkl"))
 joblib.dump(preprocessor, os.path.join(ARTIFACTS_DIR, "xgboost_preprocessor.pkl"))
 joblib.dump(label_encoder, os.path.join(ARTIFACTS_DIR, "xgboost_label_encoder.pkl"))
@@ -309,6 +331,7 @@ joblib.dump(rf_model, os.path.join(ARTIFACTS_DIR, "random_forest_grade_model.pkl
 joblib.dump({"xgb_weight": best_weight, "rf_weight": rf_weight}, os.path.join(ARTIFACTS_DIR, "hybrid_weights.joblib"))
 
 
+# Training completed
 print("\n" + "-" * 55)
 print("Artifacts saved successfully")
 print("-" * 55)
