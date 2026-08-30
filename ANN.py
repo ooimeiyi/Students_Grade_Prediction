@@ -196,12 +196,12 @@ tuning_model = MLPClassifier(
 )
 
 cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-
+    
 random_search = RandomizedSearchCV(
     estimator=tuning_model,
     param_distributions=param_grid,
     n_iter=30,
-    scoring="f1_weighted",
+    scoring="accuracy",
     cv=cv,
     verbose=1,
     random_state=42,
@@ -222,7 +222,7 @@ print("============================================")
 
 print("\nBest Parameters:")
 print(random_search.best_params_)
-print(f"\nBest CV F1: {random_search.best_score_:.4f}")
+print(f"\nBest CV Accuracy: {random_search.best_score_:.4f}")
 
 # ============================================================
 # AFTER FINE-TUNING

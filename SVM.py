@@ -179,12 +179,12 @@ param_grid = {
 # 3-fold stratified CV keeps class proportions balanced across folds during tuning
 cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
 
-# Randomly sample 30 hyperparameter combinations and pick the best by weighted F1
+# Randomly sample 30 hyperparameter combinations and pick the best by cross-validated accuracy
 search = RandomizedSearchCV(
     estimator=SVC(probability=True, random_state=42),
     param_distributions=param_grid,
     n_iter=30,
-    scoring="f1_weighted",
+    scoring="accuracy",
     cv=cv,
     random_state=42,
     n_jobs=-1,
@@ -198,7 +198,7 @@ svm_pred = svm_model.predict(X_test_processed)
 svm_prob = svm_model.predict_proba(X_test_processed)   # class probabilities, needed later for the hybrid blend
 svm_result = evaluate(y_test, svm_pred)
 
-print(f"Best CV F1      : {search.best_score_:.4f}")
+print(f"Best CV Accuracy: {search.best_score_:.4f}")
 print(f"Best parameters : {search.best_params_}")
 
 print("\nSVM Tuning Results")
@@ -283,7 +283,7 @@ print("-" * 45)
 print(f"{'SVM':>6}{'LR':>6}{'Accuracy':>12}{'F1':>10}")
 print("-" * 45)
 
-# Try several SVM/LR blend ratios and keep whichever gives the best OOF F1
+# Try several SVM/LR blend ratios and keep whichever gives the best OOF Accuracy
 for svm_weight in [0.5, 0.6, 0.7, 0.8, 0.9]:
 
     lr_weight = 1 - svm_weight
